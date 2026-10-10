@@ -2839,7 +2839,16 @@ function updateCamera(dt){
   } else {
     const bx=ball.pos.x, bz=ball.pos.z, close=state==='goal'?.72:1;
     if(!portrait){ lx=clamp(bx*.92,-HL+5,HL-5); lz=clamp(bz*.55,-9,9); const ds=(innerWidth/innerHeight<1.3?27:23)*close; px=lx; py=ds*.66; pz=lz+ds; }
-    else { lx=clamp(bx+5,-HL+5,HL-1); lz=clamp(bz*.7,-HW+6,HW-6); px=lx-19*close; py=15*close; pz=lz*.85; }
+    else {
+      // 縦画面：横FOVからコート幅（±HW＋余白）が収まる距離を逆算。狭い画面ほど引いて俯角を深くする
+      const asp=innerWidth/innerHeight, th=Math.tan(camera.fov*Math.PI/360)*asp, fitW=HW-8;
+      // D: 注視点までの距離（上限は選手が小さくなりすぎない範囲）、k: 引き具合0..1、el: 俯角
+      const D=clamp(fitW/th,24,40), k=(D-24)/16, el=(38+k*10)*Math.PI/180;
+      // 見えている半幅に応じて横追従を制限（全幅が入るなら中央固定）
+      const vis=D*th, zr=Math.max(0,HW+1.5-vis);
+      lx=clamp(bx+5-k*3,-HL+5,HL-1); lz=clamp(bz*.7,-zr,zr);
+      px=lx-D*Math.cos(el)*close; py=D*Math.sin(el)*close; pz=lz*.85;
+    }
     camLook.lerp(tmpV.set(lx,0,lz),1-Math.exp(-dt*4.5));
     camPos.lerp(tmpV.set(px,py,pz),1-Math.exp(-dt*3.2));
   }
