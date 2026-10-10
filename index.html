@@ -150,6 +150,29 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .field{display:flex;flex-direction:column;gap:8px}
 .final{font-family:var(--f-num);font-size:56px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
 .result{text-align:center;font-family:var(--f-display);font-size:28px;color:var(--gold)}
+/* 試合後スタッツ：得点者・MVP・左右比較バー */
+.end-card{max-width:480px;gap:16px}
+.scorers{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;font-weight:700;margin-top:-8px}
+.scorers ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;min-width:0}
+.scorers li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--chalk)}
+.scorers li em{font-style:normal;font-family:var(--f-num);color:var(--muted);margin-right:5px}
+.scorers li small{color:var(--muted);margin-left:4px}
+.scorers .sc1{text-align:right}
+.mvp{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.22);border-left:3px solid var(--gold)}
+.mvp>b{font-family:var(--f-display);font-weight:400;font-size:20px;color:var(--gold);line-height:1}
+.mvp div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mvp strong{font-size:15px}
+.mvp small{font-size:11px;font-weight:700;color:var(--muted)}
+.stats{display:flex;flex-direction:column;gap:9px}
+.st{display:grid;grid-template-columns:4.2em 1fr 4.2em;align-items:center;row-gap:4px}
+.st b{font-family:var(--f-num);font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
+.st b.win{color:var(--chalk)}
+.st b:last-of-type{text-align:right}
+.st span{text-align:center;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+.sbar{grid-column:1/-1;display:flex;gap:3px;height:5px}
+.sbar i{display:block;border-radius:3px;min-width:3px}
+.sbar i:first-child{background:var(--tin)} .sbar i:last-child{background:var(--t1)}
+.hl-btn{border-color:var(--gold);color:var(--gold)}
 
 /* メニュー：対戦カード（チーム＋選択中のフォーメーション） */
 .brand{display:flex;flex-direction:column;gap:8px}
@@ -257,10 +280,10 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
   <div id="replayUI" hidden>
     <div class="speedlines" id="speedlines"></div>
     <div class="lb lb-t"></div><div class="lb lb-b"></div>
-    <div class="rp-tag"><i></i>REPLAY</div>
+    <div class="rp-tag"><i></i><span id="rpTag">REPLAY</span></div>
     <div class="rp-scorer" id="rpScorer"></div>
     <div class="rp-speed" id="rpSpeed"></div>
-    <div class="rp-skip">クリック / キーでスキップ</div>
+    <div class="rp-skip" id="rpSkip">クリック / キーでスキップ</div>
   </div>
   <div id="flash"></div>
   <div id="goalCard" hidden>
@@ -362,14 +385,21 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
   </div>
 
   <div id="endOv" class="overlay" hidden>
-    <div class="card">
+    <div class="card end-card">
       <div class="eyebrow">試合終了</div>
       <div class="vs">
         <div class="club c0"><b>ブリキFC</b></div><span></span><div class="club c1"><b class="tn1">レアル・ツミキ</b></div>
       </div>
       <div class="final" id="finalScore">0 - 0</div>
+      <div class="scorers" id="scorers"><ul class="sc0"></ul><ul class="sc1"></ul></div>
       <div class="result" id="resultText">引き分け</div>
       <div class="label" id="styleLine" style="text-align:center" hidden></div>
+      <div class="mvp" id="mvp" hidden><b>MVP</b><div><strong></strong><small></small></div></div>
+      <div class="field">
+        <div class="label">スタッツ</div>
+        <div class="stats" id="statList"></div>
+      </div>
+      <button class="ghost hl-btn" id="hlBtn" hidden>ハイライトを見る</button>
       <button class="cta" id="againBtn">もう一試合</button>
       <button class="ghost" id="menuBtn">メニューに戻る</button>
     </div>
@@ -464,7 +494,6 @@ const DIFF={
 // style: 素材ごとの飾り（tin=ゼンマイ＋リベット / vinyl=頭の継ぎ目 / wood=なし / metal=リベット＋V字アンテナ）
 // kit: 胴体の柄（japan=折り紙風の柄 / band=胸の帯 / plain=無地）、accent: 襟の色（省略時は縁取りと同じ）
 // css: UIでのチーム色、ink: その上に載せる文字色、fan2: 応援席の2色目
-// CPUチームのモチーフ：ソフビ=マンチェスター・シティ、ツミキ=レアル・マドリード、超合金=バイエルン・ミュンヘン
 // カタカナ名（名・姓）から名簿エントリを作る：読みは同じ、名前は前半
 const kata=n=>{ const g=n.split('・')[0]; return {name:n,kana:n.replace('・',' '),given:g,givenKana:g}; };
 // ブリキFCのモチーフは日本代表：紺地に折り紙風の柄、赤い襟、白の縁取り、金のエンブレム
@@ -503,7 +532,7 @@ const CPU_TEAMS={
       kata('モクメ・ウッズ'),            // 木目の美しいウイング
       kata('ツミアゲ・ハイタワー')       // ゴールを積み上げる
     ]},
-  hard:{name:'超合金・ミュンヘン',desc:'超合金製',text:'重くて硬くて速い、最強の超合金軍団。一瞬のスキも見逃さない。',style:'metal',kit:'plain',css:'#dc052d',ink:'#ffffff',shirt:0xd40a2c,shorts:0xd40a2c,sock:0xd40a2c,gk:0x5a6070,trim:0xffffff,fan2:0xffffff,
+  hard:{name:'超合金・ネオミュンヘン',desc:'超合金製',text:'重くて硬くて速い、最強の超合金軍団。一瞬のスキも見逃さない。',style:'metal',kit:'plain',css:'#dc052d',ink:'#ffffff',shirt:0xd40a2c,shorts:0xd40a2c,sock:0xd40a2c,gk:0x5a6070,trim:0xffffff,fan2:0xffffff,
     glove:0xe2b13c,crest:0x0066b2,num:'#ffffff',metal:.85,rough:.25,cc:.8,shortsMetal:.9,trimMetal:.9,crestMetal:.9,roster:[
       kata('テツノ・カベーノフ'),        // 鉄の壁
       kata('ゼッタイ・トオサンスキー'),  // 絶対に通さん
@@ -1252,7 +1281,7 @@ function setupKickoff(team){
 }
 function resetMatch(){
   score=[0,0]; half=1; clock=0; stylePts=0; bestRank=''; goalStreak=0; chain.team=null; chain.passes=0;
-  mom[0]=mom[1]=rushT[0]=rushT[1]=0; pendingFoul=null; drawMomentum();
+  mom[0]=mom[1]=rushT[0]=rushT[1]=0; pendingFoul=null; drawMomentum(); resetStats();
   updateScore(); setupKickoff(0);
 }
 function updateScore(){ $('#s0').textContent=score[0]; $('#s1').textContent=score[1]; drawScoreboard(); }
@@ -1281,7 +1310,7 @@ function kick(p,ux,uz,v,vy){
   ball.vel.set(ux*v,vy,uz*v); ball.pos.y=Math.max(ball.pos.y,BR+.01);
   p.pickupCD=.32; p.kickAnim=1; p.face=Math.atan2(ux,uz); p.holdT=0;
   ball.lastTouch=p.team; ball.shot++; ball.passTo=null; ball.kickT=T; ball.kickTeam=p.team; ball.shotInfo=null;
-  ball.kicker=p; ball.kickX=p.pos.x; ball.curve=0; ball.grav=0;
+  ball.kicker=p; ball.kickX=p.pos.x; ball.curve=0; ball.grav=0; ball.passBy=null;
   kickoffGuard=false; restartGuard=null;
   sfx.kick(Math.min(1,v/30));
 }
@@ -1297,7 +1326,7 @@ function passTo(p,q,loft){
   if(loft){ const t=loftTime(d); kick(p,dx/d,dz/d,d*.94/t,4.905*t); }
   else kick(p,dx/d,dz/d,groundPassSpeed(d),.15);
   ball.passTo=q; q.receiveT=tt+1.4;
-  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  countPass(p);
   if(p.team===0) setActive(q);
 }
 function shoot(p,gx,gz,c){
@@ -1305,7 +1334,7 @@ function shoot(p,gx,gz,c){
   const v=(15+c*17)*(rushT[p.team]>0?1.06:1), vy=2+c*1.8+Math.max(0,c-.8)*14;
   const sx=ball.pos.x, sz=ball.pos.z, pk=!!(restartGuard&&restartGuard.kind==='pk');
   kick(p,dx/d,dz/d,v,vy);
-  ball.shotInfo=shotInfoOf(p,sx,sz,Math.hypot(v,vy),c); ball.shotInfo.pk=pk;
+  ball.shotInfo=shotInfoOf(p,sx,sz,Math.hypot(v,vy),c); ball.shotInfo.pk=pk; noteShot(ball.shotInfo);
   shake(.12+c*.25); if(c>.7) hitStop=.07;
   addMom(p.team,.05);
   if(pk) pkDive(p.team);
@@ -1328,7 +1357,7 @@ function curveShot(p,gx,gz,c){
   const v=clamp((21+c*9)*(rushT[p.team]>0?1.06:1),Math.sqrt(9.81/(2*B)),Math.sqrt(45/(2*B)));
   kick(p,hx,hz,v,A*v);
   ball.grav=2*B*v*v; ball.curve=-2*th/(L/v);
-  ball.shotInfo=shotInfoOf(p,sx,sz,Math.hypot(v,A*v),c); ball.shotInfo.fk=true;
+  ball.shotInfo=shotInfoOf(p,sx,sz,Math.hypot(v,A*v),c); ball.shotInfo.fk=true; noteShot(ball.shotInfo);
   shake(.2); hitStop=.07;
   addMom(p.team,.05);
 }
@@ -1447,7 +1476,7 @@ function throughPass(p,plan){
   if(plan.loft){ const t=loftTime(d); kick(p,dx/d,dz/d,d*.94/t,4.905*t); q.receiveT=t+1.6; } // 狙った地点に落ちる浮き球
   else { const v=throughSpeed(d); kick(p,dx/d,dz/d,v,.12); q.receiveT=d/(v*.75)+1.6; }
   ball.passTo=q; q.throughT=T;
-  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  countPass(p);
   if(p.team===0){ setActive(q); banner((q.wing?'ウイングへ':'')+(plan.loft?'浮き球の裏パス':q.wing?'裏パス':'スルーパス'),'',700); }
 }
 // 2-4-1: long press sends the ball in behind for a winger; stick/cursor picks the side
@@ -1513,7 +1542,7 @@ function wallReturn(p){
   if(dd<2){ passTo(p,f,false); return; }
   const v=throughSpeed(dd); kick(p,dx/dd,dz/dd,v,.12);
   ball.passTo=f; f.receiveT=dd/(v*.75)+1.6; f.throughT=T;
-  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  countPass(p);
   if(p.team===0) setActive(f);
 }
 // 3-2-2: FW の走り込む先へ浮き球。相手より先に落下地点へ着けるかで選ぶ
@@ -1554,7 +1583,7 @@ function longFeed(p,plan){
   const q=plan.q; ball.passTo=q; q.receiveT=t+1.6; q.throughT=T; q.runUntil=T+t+.6;
   // もう一人の FW もゴール前へ走り込ませて落としを狙う
   for(const o of players) if(o.team===p.team&&o.role==='FW'&&o!==q&&o!==p) o.runUntil=T+t+1.5;
-  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  countPass(p);
   if(p.team===0){ setActive(q); banner('ロングフィード','',700); }
 }
 function landTime(){ const h=ball.pos.y-BR, vy=ball.vel.y; if(ball.owner||(h<.05&&vy<1)) return 0; return (vy+Math.sqrt(vy*vy+2*9.81*Math.max(0,h)))/9.81; }
@@ -1872,6 +1901,7 @@ function tackleCheck(p){
     ball.owner=null; o.stunT=.6; o.pickupCD=.6;
     ball.vel.set(fx*5+rnd(-2,2),.6,fz*5+rnd(-2,2)); ball.lastTouch=p.team; ball.passTo=null; ball.kicker=null;
     sfx.tackle(); shake(.15); p.pickupCD=0; addMom(p.team,.08);
+    ST.tackles[p.team]++; p.st.tk++;
   } else { p.stunT=p.team===0?.28:.55; }
   p.tackleT=0;
 }
@@ -2109,7 +2139,9 @@ function tryPickup(){
   // 味方からのボールを受けられたらパス成功として勢いを加算（蹴った位置より1m以上後方で受けたバックパスは対象外）
   const k=ball.kicker, fwd=(best.pos.x-(ball.kickX??best.pos.x))*teamDir(best.team)>-1;
   if(k&&k!==best&&k.team===best.team&&ball.lastTouch===best.team&&fwd) addMom(best.team,.05);
-  ball.kicker=null; ball.curve=ball.grav=0;
+  // スタッツ：パスを味方が受けたら成功
+  const pb=ball.passBy; if(pb&&pb!==best&&pb.team===best.team){ ST.passOk[best.team]++; pb.st.ps++; }
+  ball.kicker=null; ball.passBy=null; ball.curve=ball.grav=0;
   ball.owner=best; ball.lastTouch=best.team; ball.passTo=null; best.gotT=T; best.drib=0; best.skillN=0;
   players.forEach(q=>q.receiveT=0);
   if(wall&&wall.to!==best) wall=null;
@@ -2128,7 +2160,10 @@ function gkCheck(){
     let ch;
     if(sp<7) ch=1;
     else { if(p.rolled===ball.shot) continue; p.rolled=ball.shot; ch=clamp(1.3-sp/30,.2,.97)*(p.team===1?diff.gk:1); }
-    ball.kicker=null; ball.curve=ball.grav=0;
+    // スタッツ：相手シュートに触れたらセーブ（強いシュートならハイライト候補）
+    const si=ball.shotInfo;
+    if(sp>=7&&si&&si.team!==p.team&&!si.saved&&T-si.T<3){ si.saved=true; markOnTarget(si); ST.saves[p.team]++; p.st.sv++; if(sp>16) queueChance('save',si,p); }
+    ball.kicker=null; ball.passBy=null; ball.curve=ball.grav=0;
     if(sp>12) addMom(p.team,.06); // シュートを止めたら守備側の勢いが増す
     if(Math.random()<ch){ ball.owner=p; p.holdT=rnd(.8,1.3); ball.vel.set(0,0,0); ball.lastTouch=p.team; ball.passTo=null; players.forEach(q=>q.receiveT=0); sfx.catch(); if(sp>16) sfx.ooh(); }
     else { ball.vel.x=-ball.vel.x*rnd(.2,.45); ball.vel.z+=rnd(-5,5); ball.vel.y=Math.abs(ball.vel.y)*.5+rnd(1,4); ball.lastTouch=p.team; p.pickupCD=.5; sfx.catch(); sfx.ooh(); shake(.2); }
@@ -2172,10 +2207,10 @@ function frameCollide(){
     if(Math.abs(b.x-px)<1.2){
       for(const pz of [-GW,GW]){
         if(b.y<GH){ const dx=b.x-px, dz=b.z-pz, dd=Math.hypot(dx,dz);
-          if(dd<R&&dd>1e-4){ const nx=dx/dd, nz=dz/dd, vn=v.x*nx+v.z*nz; if(vn<0){v.x-=1.7*vn*nx;v.z-=1.7*vn*nz; sfx.post(); sfx.ooh(); shake(.2);} b.x=px+nx*R; b.z=pz+nz*R; } }
+          if(dd<R&&dd>1e-4){ const nx=dx/dd, nz=dz/dd, vn=v.x*nx+v.z*nz; if(vn<0){v.x-=1.7*vn*nx;v.z-=1.7*vn*nz; notePost(); sfx.post(); sfx.ooh(); shake(.2);} b.x=px+nx*R; b.z=pz+nz*R; } }
       }
       if(Math.abs(b.z)<GW){ const dx=b.x-px, dy=b.y-GH, dd=Math.hypot(dx,dy);
-        if(dd<R&&dd>1e-4){ const nx=dx/dd, ny=dy/dd, vn=v.x*nx+v.y*ny; if(vn<0){v.x-=1.7*vn*nx;v.y-=1.7*vn*ny; sfx.post(); sfx.ooh(); shake(.2);} b.x=px+nx*R; b.y=GH+ny*R; } }
+        if(dd<R&&dd>1e-4){ const nx=dx/dd, ny=dy/dd, vn=v.x*nx+v.y*ny; if(vn<0){v.x-=1.7*vn*nx;v.y-=1.7*vn*ny; notePost(); sfx.post(); sfx.ooh(); shake(.2);} b.x=px+nx*R; b.y=GH+ny*R; } }
     }
     // inside net
     if(b.x*g.s>HL&&Math.abs(b.z)<GW+.2&&b.y<GH+.2&&state==='goal'){
@@ -2200,7 +2235,8 @@ function checkRules(){
 const RESTART_NAME={kickin:'キックイン',corner:'コーナー',gk:'ゴールキック',fk:'フリーキック',pk:'PK'};
 function setupRestart(kind,team,x,z,opt={}){
   cancelHolds();
-  ball.owner=null; ball.vel.set(0,0,0); ball.pos.set(x,BR,z); ball.passTo=null; ball.curve=ball.grav=0; ball.kicker=null;
+  ball.owner=null; ball.vel.set(0,0,0); ball.pos.set(x,BR,z); ball.passTo=null; ball.curve=ball.grav=0; ball.kicker=null; ball.passBy=null;
+  if(kind==='corner') ST.corners[team]++;
   players.forEach(p=>{p.receiveT=0;p.locked=false;});
   let taker=opt.taker&&opt.taker.team===team&&opt.taker.role!=='GK'?opt.taker:null;
   if(!taker&&kind==='gk') taker=keeper(team);
@@ -2227,7 +2263,7 @@ function setupRestart(kind,team,x,z,opt={}){
 function callFoul(by,victim){
   const t=victim.team, d=teamDir(t);
   const x=clamp(victim.pos.x,-HL+1,HL-1), z=clamp(victim.pos.z,-HW+1,HW-1);
-  by.stunT=.8; addMom(t,.06);
+  by.stunT=.8; addMom(t,.06); ST.fouls[by.team]++;
   if(x*d>HL-12&&Math.abs(z)<10){ setupRestart('pk',t,d*(HL-9),0,{taker:victim}); return; }
   const dist=Math.hypot(HL*d-x,z);
   setupRestart('fk',t,x,z,{taker:victim,direct:dist<26&&Math.abs(z)<15&&(HL-x*d)>6});
@@ -2262,6 +2298,14 @@ function goalScored(team){
     lead:prev===other?(prev===0?'先制ゴール':'勝ち越しゴール'):prev===other-1?'同点ゴール':null,
     late:half===2&&clock>HALF_LEN*2-240, streak:team===0?goalStreak:0,
     label:(scorer?'#'+scorer.num+' ':'')+TEAMS[team].name+' のゴール'};
+  // スタッツ：得点者（シュート以外で入ったら最後に蹴った味方、いなければオウンゴール）
+  const by=scorer||(ball.kicker&&ball.kicker.team===team?ball.kicker:null);
+  if(si) markOnTarget(si);
+  if(by) by.st.g++;
+  goalInfo.min=matchMin();
+  ST.goals.push({team,min:goalInfo.min,name:by?by.name:'オウンゴール',num:by?by.num:null,tag:si&&si.pk?'PK':si&&si.fk?'FK':''});
+  goalInfo.hlLabel=goalInfo.min+"' GOAL!  "+(by?'#'+by.num+' '+by.name:'オウンゴール')+'（'+TEAMS[team].name+'）';
+  hlPend=hlPend.filter(h=>h.info.goalT<T-4); // ゴールにつながった直前のセーブ／ポストはゴールの映像に含まれる
   score[team]++; updateScore();
   state='goal'; stateT=2.1; slowT=1.1; ball.owner=null; restartGuard=null; kickoffGuard=false;
   addMom(team,.2); // ゴール演出中はラッシュを発動させず、再開後に持ち越す
@@ -2389,23 +2433,24 @@ function updateVisuals(dt){
 
 // ---------- goal replay & style card ----------
 const REC_N=540, PF=12, REC_STRIDE=players.length*PF+8;
-const recBuf=new Float32Array(REC_N*REC_STRIDE), recT=new Float64Array(REC_N);
-let recHead=0, recCount=0, recLastT=-Infinity;
+// live：試合中に録り続けるリングバッファ。rec：再生に使う録画（ハイライト再生中は切り出したクリップ）
+const live={buf:new Float32Array(REC_N*REC_STRIDE),t:new Float64Array(REC_N),head:0,count:0,n:REC_N};
+let rec=live, recLastT=-Infinity;
 function recordFrame(){
   if(T-recLastT<1/62) return; recLastT=T;
-  let o=recHead*REC_STRIDE;
+  let o=live.head*REC_STRIDE; const recBuf=live.buf;
   for(const p of players){ const r=p.root;
     recBuf[o++]=r.position.x; recBuf[o++]=r.position.y; recBuf[o++]=r.position.z; recBuf[o++]=r.rotation.y; recBuf[o++]=r.rotation.z;
     recBuf[o++]=p.body.position.y; recBuf[o++]=p.body.rotation.x; recBuf[o++]=p.body.scale.y;
     recBuf[o++]=p.hipL.rotation.x; recBuf[o++]=p.hipR.rotation.x; recBuf[o++]=p.armL.rotation.x; recBuf[o++]=p.armR.rotation.x; }
   const q=ballMesh.quaternion;
   recBuf[o++]=ball.pos.x; recBuf[o++]=ball.pos.y; recBuf[o++]=ball.pos.z; recBuf[o++]=q.x; recBuf[o++]=q.y; recBuf[o++]=q.z; recBuf[o++]=q.w; recBuf[o++]=ball.vel.length();
-  recT[recHead]=T; recHead=(recHead+1)%REC_N; if(recCount<REC_N) recCount++;
+  live.t[live.head]=T; live.head=(live.head+1)%REC_N; if(live.count<REC_N) live.count++;
 }
-const recIdx=k=>(recHead-recCount+k+REC_N*2)%REC_N;
+const recIdx=k=>(rec.head-rec.count+k+rec.n*2)%rec.n;
 function recFind(t){
-  const hi0=recCount-1;
-  if(recCount<2||t<=recT[recIdx(0)]) return [0,0];
+  const hi0=rec.count-1, recT=rec.t;
+  if(rec.count<2||t<=recT[recIdx(0)]) return [0,0];
   if(t>=recT[recIdx(hi0)]) return [hi0,0];
   let lo=0, hi=hi0;
   while(hi-lo>1){ const m=(lo+hi)>>1; if(recT[recIdx(m)]<=t) lo=m; else hi=m; }
@@ -2413,12 +2458,12 @@ function recFind(t){
 }
 const qa=new THREE.Quaternion(), qb=new THREE.Quaternion();
 function recBallAt(t,out){
-  const [k,f]=recFind(t), k2=Math.min(recCount-1,k+1), o=players.length*PF;
+  const [k,f]=recFind(t), k2=Math.min(rec.count-1,k+1), o=players.length*PF, recBuf=rec.buf;
   const A=recIdx(k)*REC_STRIDE+o, B=recIdx(k2)*REC_STRIDE+o;
   return out.set(recBuf[A]+(recBuf[B]-recBuf[A])*f,recBuf[A+1]+(recBuf[B+1]-recBuf[A+1])*f,recBuf[A+2]+(recBuf[B+2]-recBuf[A+2])*f);
 }
 function applyRec(t){
-  const [k,f]=recFind(t), k2=Math.min(recCount-1,k+1);
+  const [k,f]=recFind(t), k2=Math.min(rec.count-1,k+1), recBuf=rec.buf;
   const A=recIdx(k)*REC_STRIDE, B=recIdx(k2)*REC_STRIDE;
   const L=i=>recBuf[A+i]+(recBuf[B+i]-recBuf[A+i])*f, LA=i=>lerpAngle(recBuf[A+i],recBuf[B+i],f);
   players.forEach((p,j)=>{ const o=j*PF;
@@ -2443,10 +2488,16 @@ function flash(){ flashEl.classList.remove('go'); void flashEl.offsetWidth; flas
 function startReplay(){
   const info=goalInfo;
   const lead=info.shotT!=null?(info.team===0?2.4:1.5):1.6;
-  const first=recCount?recT[recIdx(0)]:info.goalT;
+  rec=live;
+  const first=live.count?live.t[recIdx(0)]:info.goalT;
   RP={t:Math.max(first,(info.shotT??info.goalT)-lead),t1:info.goalT+.75,info,cut:-1,flashed:false};
+  addHighlight('goal',info,RP.t,info.goalT+1);
+  openReplayUI(info.label,'REPLAY','クリック / キーでスキップ');
+}
+// リプレイ画面を開く（ゴール直後のリプレイと試合後ハイライトで共通）
+function openReplayUI(label,tag,skip){
   state='replay';
-  $('#rpScorer').textContent=info.label;
+  $('#rpScorer').textContent=label; $('#rpTag').textContent=tag; $('#rpSkip').textContent=skip;
   speedEl.classList.remove('pop'); linesEl.classList.remove('on');
   replayUI.hidden=false; requestAnimationFrame(()=>replayUI.classList.add('on'));
   activeRing.visible=activeArrow.visible=cpuRing.visible=cursorRing.visible=targetRing.visible=false; meter.hidden=nameTag.hidden=cpuTag.hidden=true;
@@ -2485,8 +2536,118 @@ function endReplay(){
   replayUI.classList.remove('on'); replayUI.hidden=true; linesEl.classList.remove('on');
   trail.forEach(m=>m.visible=false);
   sizeComposer();
-  const info=RP.info; RP=null;
+  const info=RP.info, hl=RP.hl; RP=null;
+  if(hl){ if(++HLS.i<HLS.list.length) playHighlight(); else endHighlights(); return; }
   if(info.team===0) startCard(info); else setupKickoff(nextKick);
+}
+
+// ---------- 試合後ハイライト ----------
+// ライブ録画から [t0,t1] のフレームを切り出して保存（リング形式のまま head=0 で読める）
+function snapClip(t0,t1){
+  const idx=[];
+  for(let k=0;k<live.count;k++){ const i=(live.head-live.count+k+REC_N*2)%REC_N, t=live.t[i]; if(t>=t0&&t<=t1) idx.push(i); }
+  if(idx.length<10) return null;
+  const n=idx.length, c={buf:new Float32Array(n*REC_STRIDE),t:new Float64Array(n),head:0,count:n,n};
+  idx.forEach((i,k)=>{ c.buf.set(live.buf.subarray(i*REC_STRIDE,(i+1)*REC_STRIDE),k*REC_STRIDE); c.t[k]=live.t[i]; });
+  return c;
+}
+const HL_CHANCE_KEEP=6, HL_CHANCE_PLAY=3;
+let hlPend=[], HLS=null;
+function addHighlight(kind,info,t0,t1){
+  const clip=snapClip(t0,t1); if(!clip) return;
+  ST.hl.push({kind,info,clip,t0:Math.max(t0,clip.t[0]),t1:Math.min(info.goalT+(kind==='goal'?.75:.9),clip.t[clip.n-1]),v:info.si?info.si.v:0});
+  // 惜しいシーンはシュートの速い順に一定数だけ残す（メモリ節約）
+  const ch=ST.hl.filter(h=>h.kind!=='goal');
+  if(ch.length>HL_CHANCE_KEEP){ const weak=ch.reduce((a,b)=>b.v<a.v?b:a); ST.hl.splice(ST.hl.indexOf(weak),1); }
+}
+// 好セーブ／ポスト直撃：直後の映像も入れたいので少し待ってから切り出す
+function queueChance(kind,si,keeper){
+  if(state!=='play'||si.hl) return; si.hl=true;
+  const lbl=kind==='save'?'好セーブ！  #'+keeper.num+' '+keeper.name+'（'+TEAMS[keeper.team].name+'）':'ポスト直撃  #'+si.p.num+' '+si.p.name+'（'+TEAMS[si.team].name+'）';
+  hlPend.push({kind,at:T+1.1,info:{team:si.team,shotT:si.T,goalT:T,entryZ:ball.pos.z,si,min:matchMin(),hlLabel:matchMin()+"' "+lbl}});
+}
+function notePost(){ const si=ball.shotInfo; if(state==='play'&&si&&T-si.T<3) queueChance('post',si); }
+function flushHighlights(force=false){
+  while(hlPend.length&&(force||T>=hlPend[0].at)){ const h=hlPend.shift(); addHighlight(h.kind,h.info,h.info.shotT-(h.info.team===0?2.4:1.5),h.at); }
+}
+// 再生順：ゴールは全部＋惜しいシーン上位を時系列で
+function highlightList(){
+  const goals=ST.hl.filter(h=>h.kind==='goal'), ch=ST.hl.filter(h=>h.kind!=='goal').sort((a,b)=>b.v-a.v).slice(0,HL_CHANCE_PLAY);
+  return [...goals,...ch].sort((a,b)=>a.t0-b.t0);
+}
+function startHighlights(){
+  const list=highlightList(); if(!list.length) return;
+  $('#endOv').hidden=true; HLS={list,i:0}; playHighlight();
+}
+function playHighlight(){
+  const h=HLS.list[HLS.i]; rec=h.clip;
+  RP={t:h.t0,t1:h.t1,info:h.info,cut:-1,flashed:false,hl:true};
+  openReplayUI(h.info.hlLabel,'HIGHLIGHTS '+(HLS.i+1)+'/'+HLS.list.length,'クリック / キーで次へ');
+}
+function endHighlights(){ HLS=null; rec=live; state='end'; stateT=0; showEnd(); $('#hlBtn').focus(); }
+
+// ---------- 試合スタッツ ----------
+// チームごと [ブリキ, CPU] に数える。選手ごとの p.st は MVP 選びに使う
+const ST={};
+function resetStats(){
+  for(const k of ['poss','shots','onT','passA','passOk','tackles','fouls','corners','saves','top']) ST[k]=[0,0];
+  ST.goals=[]; ST.hl=[]; hlPend=[]; live.count=0;
+  players.forEach(p=>p.st={g:0,sh:0,tk:0,ps:0,sv:0});
+}
+const matchMin=()=>Math.min(Math.floor(clock/60)+1,half*HALF_LEN/60);
+function noteShot(si){ ST.shots[si.team]++; si.p.st.sh++; ST.top[si.team]=Math.max(ST.top[si.team],Math.round(si.v*3.6)); }
+function markOnTarget(si){ if(si&&!si.onT){ si.onT=true; ST.onT[si.team]++; } }
+function countPass(p){
+  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  ST.passA[p.team]++; ball.passBy=p;
+}
+// MVP：得点・セーブ・タックル・パスを点数化。勝ったチームから選ぶ（引き分けは両チームから）
+function pickMVP(){
+  const w=score[0]>score[1]?0:score[0]<score[1]?1:null;
+  let best=null, bs=-1;
+  for(const p of players){ if(w!==null&&p.team!==w) continue; const s=p.st, v=s.g*10+s.sv*3+s.tk*2+s.sh+s.ps*.5; if(v>bs){ bs=v; best=p; } }
+  if(!best||bs<=0) return null;
+  const s=best.st, why=[];
+  if(s.g) why.push(s.g+'ゴール'); if(s.sv) why.push(s.sv+'セーブ'); if(s.tk) why.push(s.tk+'タックル'); if(s.ps) why.push('パス成功'+s.ps); if(!s.g&&s.sh) why.push('シュート'+s.sh);
+  return {p:best,why:why.slice(0,3).join(' · ')};
+}
+function renderStats(){
+  const pct=(a,b)=>b?Math.round(a/b*100):0, ps=ST.poss[0]+ST.poss[1];
+  const p0=ps?Math.round(ST.poss[0]/ps*100):50;
+  // [項目名, ブリキ, CPU, 表示用の文字列（省略時は数値）, 少ない方が良いか]
+  const rows=[
+    ['ボール支配率',p0,100-p0,[p0+'%',(100-p0)+'%']],
+    ['シュート',ST.shots[0],ST.shots[1]],
+    ['枠内シュート',ST.onT[0],ST.onT[1]],
+    ['パス成功率',pct(ST.passOk[0],ST.passA[0]),pct(ST.passOk[1],ST.passA[1]),[0,1].map(t=>pct(ST.passOk[t],ST.passA[t])+'%')],
+    ['パス成功',ST.passOk[0],ST.passOk[1]],
+    ['タックル成功',ST.tackles[0],ST.tackles[1]],
+    ['セーブ',ST.saves[0],ST.saves[1]],
+    ['コーナーキック',ST.corners[0],ST.corners[1]],
+    ['ファウル',ST.fouls[0],ST.fouls[1],null,true],
+    ['最速シュート',ST.top[0],ST.top[1],[0,1].map(t=>ST.top[t]?ST.top[t]+'km/h':'-')]
+  ];
+  const list=$('#statList'); list.textContent='';
+  for(const [name,a,b,txt,low] of rows){
+    const row=document.createElement('div'); row.className='st';
+    const l=document.createElement('b'), m=document.createElement('span'), r=document.createElement('b');
+    l.textContent=txt?txt[0]:a; m.textContent=name; r.textContent=txt?txt[1]:b;
+    if(a!==b){ ((a>b)!==!!low?l:r).classList.add('win'); }
+    const bar=document.createElement('div'); bar.className='sbar';
+    const i0=document.createElement('i'), i1=document.createElement('i');
+    i0.style.flex=String(a+b?a:1); i1.style.flex=String(a+b?b:1);
+    bar.append(i0,i1); row.append(l,m,r,bar); list.append(row);
+  }
+  // 得点者（チームごとに時系列）
+  [0,1].forEach(t=>{ const ul=$('#scorers .sc'+t); ul.textContent='';
+    for(const g of ST.goals){ if(g.team!==t) continue;
+      const li=document.createElement('li'), em=document.createElement('em'); em.textContent=g.min+"'";
+      li.append(em,g.name); if(g.tag){ const sm=document.createElement('small'); sm.textContent='('+g.tag+')'; li.append(sm); }
+      ul.append(li); } });
+  $('#scorers').hidden=!ST.goals.length;
+  const mvp=pickMVP(), mv=$('#mvp'); mv.hidden=!mvp;
+  if(mvp){ mv.querySelector('strong').textContent='#'+mvp.p.num+' '+mvp.p.name; mv.querySelector('small').textContent=TEAMS[mvp.p.team].name+(mvp.why?'　'+mvp.why:''); }
+  const n=highlightList().length, hb=$('#hlBtn'); hb.hidden=!n; hb.textContent='ハイライトを見る（'+n+'シーン）';
 }
 function goalBadges(info){
   const b=[], si=info.si;
@@ -2566,6 +2727,7 @@ function step(dt){
       return;
     }
     const ot=ball.owner?ball.owner.team:null;
+    if(ot!==null) ST.poss[ot]+=dt;
     if(ot!==null&&ot!==chain.team){ chain.team=ot; chain.passes=0; }
     const flipped=ot===1&&lastOwnerTeam!==1; if(ot!==null) lastOwnerTeam=ot;
     switchTimer-=dt;
@@ -2582,6 +2744,7 @@ function step(dt){
       if(active&&o&&o.team===1&&!o.locked&&o.role!=='GK'&&active.stunT<=0&&active.tackleT<=0&&dXZ(active.pos,ball.pos)<.85&&Math.random()<dt*1.6){
         ball.owner=null; o.stunT=.35; o.pickupCD=.5; const fx=Math.sin(active.face), fz=Math.cos(active.face);
         ball.vel.set(fx*3+rnd(-1,1),.3,fz*3+rnd(-1,1)); ball.lastTouch=0; ball.passTo=null; ball.kicker=null; sfx.tackle(); addMom(0,.04);
+        ST.tackles[0]++; active.st.tk++;
       } }
     if(charging&&ball.owner===active&&charge>=1){ charging=false; meter.hidden=true; userShoot(1); }
     // CPUのPK：キーパーの飛ぶ方向は、キックの瞬間に入れている方向（マウスはカーソルの側）
@@ -2613,7 +2776,7 @@ function frame(now){
     else if(slowT>0){ slowT-=raw; dt*=.32; }
     if(state==='replay'){ T+=raw; updateReplay(raw); updateVisuals(raw); }
     else if(state==='card'){ T+=raw; updateCard(raw); updateVisuals(raw); }
-    else { step(dt); updateVisuals(dt); if(state==='play'||state==='goal'||state==='kickoff') recordFrame(); }
+    else { step(dt); updateVisuals(dt); if(state==='play'||state==='goal'||state==='kickoff'){ recordFrame(); if(hlPend.length) flushHighlights(); } }
   }
   updateCamera(raw); updateMouseWorld();
   if(composer) composer.render(raw); else renderer.render(scene,camera);
@@ -2624,6 +2787,7 @@ function frame(now){
 function showEnd(){
   $('#finalScore').textContent=score[0]+' - '+score[1];
   $('#resultText').textContent=score[0]>score[1]?'ブリキFCの勝ち！':score[0]<score[1]?TEAMS[1].name+'の勝ち':'引き分け';
+  flushHighlights(true); renderStats();
   const sl=$('#styleLine'); sl.hidden=!stylePts; if(stylePts) sl.textContent='スタイルポイント '+stylePts.toLocaleString()+'　最高ランク '+bestRank;
   $('#endOv').hidden=false;
 }
@@ -2632,7 +2796,7 @@ function startGame(){
   prepareCpuFormation();
   resetMatch(); banner('キックオフ',TEAMS[1].name+' は '+FORMATIONS[teamForm[1]].name,1600);
 }
-function toMenu(){ if(RP||CARD){ RP=null; CARD=null; replayUI.classList.remove('on'); replayUI.hidden=true; $('#goalCard').hidden=true; trail.forEach(m=>m.visible=false); sizeComposer(); } state='menu'; paused=false; $('#pauseOv').hidden=true; $('#endOv').hidden=true; $('#menu').hidden=false; $('#formView').hidden=true; $('#menuMain').hidden=false; resetPositions(); ball.owner=null; ball.pos.set(0,BR,0); ball.vel.set(0,0,0); active=null; }
+function toMenu(){ HLS=null; rec=live; if(RP||CARD){ RP=null; CARD=null; replayUI.classList.remove('on'); replayUI.hidden=true; $('#goalCard').hidden=true; trail.forEach(m=>m.visible=false); sizeComposer(); } state='menu'; paused=false; $('#pauseOv').hidden=true; $('#endOv').hidden=true; $('#menu').hidden=false; $('#formView').hidden=true; $('#menuMain').hidden=false; resetPositions(); ball.owner=null; ball.pos.set(0,BR,0); ball.vel.set(0,0,0); active=null; }
 function togglePause(){
   if(state==='menu'||state==='end') return;
   paused=!paused; $('#pauseOv').hidden=!paused; if(paused&&AC) AC.suspend&&AC.suspend(); else if(AC) AC.resume&&AC.resume();
@@ -2640,6 +2804,7 @@ function togglePause(){
 }
 $('#startBtn').addEventListener('click',startGame);
 $('#againBtn').addEventListener('click',startGame);
+$('#hlBtn').addEventListener('click',startHighlights);
 $('#menuBtn').addEventListener('click',toMenu);
 $('#quitBtn').addEventListener('click',toMenu);
 $('#resumeBtn').addEventListener('click',togglePause);
