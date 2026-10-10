@@ -60,7 +60,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 #pauseBtn{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-family:var(--f-num);font-weight:700;font-size:14px}
 @media (max-width:460px){.bug .tm span{display:none}.bug .tm{padding:6px 8px}}
 
-#app #radar{height:auto;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(250px,34vw);aspect-ratio:70/50;border-radius:8px;border:1px solid var(--line);background:var(--panel);box-shadow:0 8px 22px rgba(0,0,0,.4);pointer-events:none}
+#app #radar{height:auto;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(250px,34vw);aspect-ratio:70/50;border-radius:8px;border:1px solid rgba(44,70,56,.35);background:rgba(14,26,20,.1);box-shadow:0 4px 12px rgba(0,0,0,.1);pointer-events:none}
 #app #radar.tall{width:min(150px,30vw);aspect-ratio:50/70}
 body.touchui #app #radar{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 62px);width:min(170px,40vw)}
 body.touchui #app #radar.tall{width:min(110px,28vw)}
@@ -2378,7 +2378,7 @@ cv.addEventListener('pointerup',e=>{ if(e.pointerType!=='mouse'||!(e.button in m
 // ---------- radar (overhead mini-map) ----------
 const radar=$('#radar'), rctx=radar.getContext('2d');
 let radarOn=true; try{ radarOn=localStorage.getItem('toy8-radar')!=='0'; }catch(e){}
-const RC={pitch:'rgba(44,120,58,.92)',stripe:'rgba(255,255,255,.05)',line:'rgba(243,239,226,.6)',t0:BRIKI.css,t0e:'#f3efe2',t1:'#ec5444',t1e:'#23264a',gk0:'#f2c21c',gk1:'#2bb06a',me:'#ffd23f',ball:'#ffffff'};
+const RC={pitch:'rgba(44,120,58,.08)',stripe:'rgba(255,255,255,.005)',line:'rgba(243,239,226,.38)',t0:BRIKI.css,t0e:'#f3efe2',t1:'#ec5444',t1e:'#23264a',gk0:'#f2c21c',gk1:'#2bb06a',me:'#ffd23f',ball:'#ffffff'};
 function drawRadar(){
   const show=radarOn&&state!=='menu'&&state!=='replay'&&state!=='card';
   if(radar.hidden===show) radar.hidden=!show;
