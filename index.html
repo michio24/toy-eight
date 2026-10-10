@@ -53,6 +53,10 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 #skillPop.go{animation:skp .9s cubic-bezier(.2,1.4,.4,1) forwards}
 @keyframes skp{0%{opacity:0;transform:translate(-50%,-60%) scale(.5)}15%{opacity:1;transform:translate(-50%,-100%) scale(1.1)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-180%) scale(1)}}
 @media (prefers-reduced-motion:reduce){.mb.rush,#rushEdge.on{animation:none}}
+/* 風向計（うみかぜスタジアムのみ）：矢印は風が吹いていく向き */
+.wind{display:flex;align-items:center;gap:5px;align-self:flex-start;padding:2px 8px 2px 4px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-family:var(--f-num);font-weight:700;font-size:12px;color:var(--chalk);font-variant-numeric:tabular-nums}
+.wind svg{width:18px;height:18px;display:block;transition:transform .3s}
+.wind small{font-size:10px;color:var(--muted)}
 #pauseBtn{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-family:var(--f-num);font-weight:700;font-size:14px}
 @media (max-width:460px){.bug .tm span{display:none}.bug .tm{padding:6px 8px}}
 
@@ -247,6 +251,19 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .roster{display:flex;flex-wrap:wrap;gap:6px}
 .roster span{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
 
+/* スタジアム選択 */
+.spick{display:flex;align-items:center;gap:10px;padding:9px 12px 9px 9px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.18);text-align:left;min-width:0;transition:border-color .15s,background .15s,transform .1s}
+.spick:hover{border-color:var(--muted);background:rgba(255,255,255,.05)}
+.spick:active{transform:scale(.98)}
+.spick>i,.topt>.sw{flex:none;width:30px;height:30px;border-radius:7px;background:var(--c);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22),inset 0 0 0 1px rgba(255,255,255,.15)}
+.sp-txt{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.sp-txt small{font-size:11px;font-weight:700;color:var(--muted)}
+.sp-txt b{font-size:15px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spick .fp-go{flex:none}
+.sview .topt{grid-template-columns:auto 1fr auto;padding:10px 14px 10px 10px}
+.sview .lv{font-size:11px;color:var(--muted)}
+.sview .topt>.sw{margin:0;align-self:center}
+
 /* 操作説明 */
 #helpOv{background:rgba(6,12,9,.8)}
 .help{max-width:520px}
@@ -285,6 +302,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
         <div class="clk" id="clock">前半 00:00</div>
       </div>
       <div class="mom" aria-label="勢いゲージ"><b class="rl" id="rl0"></b><div class="mb m0" id="mb0"><i id="m0"></i></div><small>勢い</small><div class="mb m1" id="mb1"><i id="m1"></i></div><b class="rl" id="rl1"></b></div>
+      <div class="wind" id="windUI" hidden aria-label="風向き"><svg viewBox="0 0 20 20" id="windArrow" aria-hidden="true"><path d="M10 2l6 8h-4v8H8v-8H4z" fill="#9fd0ff"/></svg><small>風</small><span id="windSpd">0</span><small>m/s</small></div>
     </div>
     <button id="pauseBtn" aria-label="一時停止">II</button>
   </div>
@@ -346,6 +364,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
           </button>
         </div>
       </div>
+      <button class="spick" id="sPick" aria-label="スタジアムを変更"><i id="spSw"></i><span class="sp-txt"><small>スタジアム</small><b id="spName"></b></span><span class="fp-go">変更 ›</span></button>
       <div class="menu-sub">
         <button class="cta" id="startBtn">キックオフ</button>
         <button class="ghost" id="helpBtn">操作説明・ルール</button>
@@ -364,6 +383,20 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
         <div class="roster" id="tvRoster"></div>
       </div>
       <button class="cta" id="teamOk">決定</button>
+    </div>
+
+    <div class="card tview sview" id="stadView" hidden>
+      <div class="vhead">
+        <button class="back" id="stadBack" aria-label="戻る">‹</button>
+        <div><div class="eyebrow">試合会場</div><h2>スタジアム</h2></div>
+      </div>
+      <div class="tlist" id="svList" role="group" aria-label="スタジアム"></div>
+      <div class="fd">
+        <p id="svText"></p>
+        <div class="rate" id="svRate"></div>
+        <div class="special"><small>特徴</small><span id="svSp"></span></div>
+      </div>
+      <button class="cta" id="stadOk">決定</button>
     </div>
 
     <div class="card fview" id="formView" hidden>
@@ -466,6 +499,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
           <li>キックインあり・<b>オフサイドなし</b></li>
           <li>後ろからのタックルはファウル。エリア内なら<b>PK</b>、ゴール近くの直接FKはカーブで壁越えを狙える</li>
           <li>パス・タックル・スキルで「<b>勢い</b>」が溜まり、満タンで<b>ラッシュタイム</b></li>
+          <li>スタジアムによって、勢いのたまり方・ボールの転がり方・選手の踏ん張りが変わる（うみかぜスタジアムは<b>風</b>に注意）</li>
         </ul>
       </section>
       </div>
@@ -564,6 +598,42 @@ let cpuLevel='normal'; try{ const v=localStorage.getItem('toy8-cpu'); if(CPU_TEA
 let diff=DIFF[cpuLevel];
 const TEAMS=[BRIKI,CPU_TEAMS[cpuLevel]];
 
+// ---------- スタジアム ----------
+// 試合への影響 … mom: 勢いのたまりやすさ（倍率） decay: 勢いの自然減少（倍率） rush: ラッシュタイムの長さ（秒）
+//   rollK/rollC: 転がるボールの減速（速さに比例する分／一定の分） bounce: 弾み grip: 選手の踏ん張り（小さいほど滑る）
+//   speed: 選手の走る速さ（倍率） loftDist: これより遠い前へのパスは浮き球にする（m）
+//   bumpy: イレギュラーバウンド wind: 風が吹く crowd: 歓声の大きさ lux: 花火・LEDリボン・フラッシュの演出
+// 見た目 … density: 観客の入り（0〜1） pitch: ピッチの種類 sky: 空の色[上,中,地平] fog: [色,近,遠] track/outer: ピッチ外・遠景の地面 css: メニューの色見本
+// rate: メニュー表示用の[勢い,ボールの転がり]（1〜5）
+const STADIUMS={
+  toy:{name:'トイ・エイト・スタジアム',desc:'ブリキFCのホーム',tag:'標準',css:'#3a9244',fascia:'TOY EIGHT STADIUM',
+    text:'ブリキFCのホームスタジアム。芝の状態もボールの転がりも勢いのたまり方もすべてが標準で、クセのない試合ができる。屋根のない素朴なスタンドに地元のファンが集まり、のんびり声援を送る。まずはここから。',sp:'特別な効果なし',rate:[3,3],
+    mom:1,decay:1,rush:9,rollK:.7,rollC:.9,bounce:.52,grip:1,crowd:1,
+    pitch:'grass',sky:[0x3f7fd0,0x8fbbe6,0xf0e4cc],fog:[0xe6dcc6,140,360],track:0x245e2d,outer:0x7aa652,density:.5},
+  school:{name:'市立第八小学校グラウンド',desc:'土のグラウンド',tag:'勢い↓',css:'#b48a5c',
+    text:'放課後の市立第八小学校のグラウンド。デコボコの土でボールはすぐ止まり、ときどき変な方向へ跳ねる。応援はテントの下の保護者だけなので、なかなか盛り上がらない。校舎の時計が見守る中、泥くさく戦おう。',
+    sp:'イレギュラーバウンド／勢いがたまりにくい',rate:[1,2],
+    mom:.65,decay:1.35,rush:8,rollK:.95,rollC:1.3,bounce:.42,grip:1,crowd:.35,bumpy:true,
+    pitch:'dirt',sky:[0x3f7fd0,0x8fbbe6,0xf0e4cc],fog:[0xe6dcc6,140,360],track:0xa47c50,outer:0x7aa652,density:0},
+  mega:{name:'トイ・メガスタジアム',desc:'超大型・天然芝',tag:'勢い↑',css:'#7ed957',fascia:'TOY MEGA STADIUM',
+    text:'8万人収容の超大型スタジアム。手入れの行き届いた芝でボールはよく走り、大観衆の後押しで一気に勢いがつく。ゴールが決まれば花火が上がり、LEDビジョンとカメラのフラッシュがスタジアムを彩る。',
+    sp:'勢いがたまりやすく、ラッシュタイムが長い（11秒）',rate:[5,4],
+    mom:1.35,decay:.75,rush:11,rollK:.55,rollC:.65,bounce:.56,grip:1,crowd:1.5,lux:true,
+    pitch:'lush',sky:[0x3f7fd0,0x8fbbe6,0xf0e4cc],fog:[0xe6dcc6,140,360],track:0x1f5a2a,outer:0x7aa652,density:1},
+  snow:{name:'ゆきやまスタジアム',desc:'雪のピッチ',tag:'滑る',css:'#dfe7f0',fascia:'YUKIYAMA STADIUM',
+    text:'冬の日に一面の銀世界となったスタジアム。ボールは雪に埋もれてすぐ止まり、選手は踏ん張りがきかずに滑るので、スライディングも長く伸びる。降りしきる雪の中でも見やすいよう、オレンジボールを使用。',
+    sp:'選手が滑って止まりにくい／スライディングが長く伸びる',rate:[3,1],
+    mom:1,decay:1,rush:9,rollK:1.05,rollC:1.35,bounce:.3,grip:.4,crowd:.8,
+    pitch:'snow',sky:[0x8d9bb0,0xb9c3d0,0xdde3ea],fog:[0xd9dfe6,60,260],track:0xe4eaf0,outer:0xf2f5f8,density:.4},
+  seaside:{name:'うみかぜスタジアム',desc:'砂のビーチ・海風',tag:'砂＋風',css:'#e9d6a6',fascia:'UMIKAZE STADIUM',
+    text:'海辺の砂浜につくられたビーチスタジアム。砂に足を取られて走りは重く、ボールは転がらない。浮き球でつなぎたいが、強い海風がボールを流す。風向きと強さは試合中に変わるので、左上の風向計をチェック。',
+    sp:'選手が少し遅い／浮き球のパスが増える／ボールが風に流される',rate:[3,1],
+    mom:1,decay:1,rush:9,rollK:1.1,rollC:1.5,bounce:.32,grip:1,speed:.93,loftDist:15,crowd:1,wind:true,
+    pitch:'sand',sky:[0x2a84e0,0x86c4ef,0xe9f1ef],fog:[0xe3edf0,180,560],track:0xe2cc98,outer:0x2c7fb5,density:.5}
+};
+let stadKey='toy'; try{ const s=localStorage.getItem('toy8-stad'); if(STADIUMS[s]) stadKey=s; }catch(e){}
+let STAD=STADIUMS[stadKey];
+
 // ---------- quality ----------
 // 画質は軽量で固定（ポストエフェクト・高解像度シャドウなし）
 const HQ=false;
@@ -606,14 +676,16 @@ const SUN_DIR=new THREE.Vector3(24,30,17).normalize();
   scene.environment=pm.fromScene(s,0.035).texture;
 })();
 
-// sky dome
-(function(){
-  const geo=new THREE.SphereGeometry(600,40,20); const p=geo.attributes.position; const c=[];
-  const top=col(0x3f7fd0), mid=col(0x8fbbe6), hor=col(0xf0e4cc), t=new THREE.Color();
-  for(let i=0;i<p.count;i++){const y=Math.max(0,p.getY(i)/600); if(y<.18) t.copy(hor).lerp(mid,y/.18); else t.copy(mid).lerp(top,Math.pow((y-.18)/.82,.7)); c.push(t.r,t.g,t.b);}
-  geo.setAttribute('color',new THREE.Float32BufferAttribute(c,3));
-  scene.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false})));
-})();
+// sky dome（スタジアムごとに色を塗り直す）
+const skyGeo=new THREE.SphereGeometry(600,40,20);
+skyGeo.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(skyGeo.attributes.position.count*3),3));
+function paintSky([top,mid,hor]){
+  const p=skyGeo.attributes.position, c=skyGeo.attributes.color, T=col(top), M=col(mid), H=col(hor), t=new THREE.Color();
+  for(let i=0;i<p.count;i++){const y=Math.max(0,p.getY(i)/600); if(y<.18) t.copy(H).lerp(M,y/.18); else t.copy(M).lerp(T,Math.pow((y-.18)/.82,.7)); c.setXYZ(i,t.r,t.g,t.b);}
+  c.needsUpdate=true;
+}
+paintSky(STADIUMS.toy.sky);
+scene.add(new THREE.Mesh(skyGeo,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false})));
 
 // puffy toy clouds
 const clouds=new THREE.Group();
@@ -630,7 +702,7 @@ const clouds=new THREE.Group();
   scene.add(clouds);
 })();
 
-scene.add(new THREE.HemisphereLight(col(0xdfeeff),col(0x3a5a2c),0.5));
+const hemi=new THREE.HemisphereLight(col(0xdfeeff),col(0x3a5a2c),0.5); scene.add(hemi);
 const sun=new THREE.DirectionalLight(col(0xffe8c8),2.7);
 sun.castShadow=true; sun.shadow.mapSize.set(HQ?2048:1024,HQ?2048:1024);
 Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30,near:1,far:140});
@@ -640,24 +712,53 @@ const fill=new THREE.DirectionalLight(col(0xbcd4ff),.35); fill.position.set(-20,
 
 // ---------- pitch ----------
 const PM=5;
-function pitchTexture(){
+// kind: grass（標準の芝）/ lush（メガ：鮮やかな芝）/ dirt（学校の土）/ snow（雪）/ sand（ビーチの砂）
+function pitchTexture(kind='grass'){
   const S=22, W=(HL*2+PM*2)*S, H=(HW*2+PM*2)*S;
   const c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
   const X=x=>(x+HL+PM)*S, Y=z=>(z+HW+PM)*S;
-  g.fillStyle='#2e7a37'; g.fillRect(0,0,W,H);
-  for(let x=-HL-PM;x<HL+PM;x+=4){ const i=Math.floor((x+HL)/4); g.fillStyle=i%2?'#3a9244':'#2f8038'; g.fillRect(X(x),0,4*S+1,H); }
-  for(let z=-HW-PM;z<HW+PM;z+=4){ const i=Math.floor((z+HW)/4); if(i%2){ g.fillStyle='rgba(255,255,210,.045)'; g.fillRect(0,Y(z),W,4*S+1);} }
-  for(let i=0;i<60000;i++){ const a=Math.random(); g.fillStyle=a<.45?'rgba(255,255,200,.05)':a<.9?'rgba(0,30,5,.08)':'rgba(120,150,40,.08)'; g.fillRect(Math.random()*W,Math.random()*H,1+Math.random()*2,2+Math.random()*4); }
-  const wear=(x,z,r,a)=>{ const gr=g.createRadialGradient(X(x),Y(z),0,X(x),Y(z),r*S); gr.addColorStop(0,`rgba(150,128,70,${a})`); gr.addColorStop(1,'rgba(150,128,70,0)'); g.fillStyle=gr; g.beginPath(); g.ellipse(X(x),Y(z),r*S,r*S*.75,0,0,Math.PI*2); g.fill(); };
-  for(const s of [-1,1]){ wear(s*(HL-1.6),0,3.2,.35); wear(s*(HL-8),0,1.6,.22); wear(s*(HL-4),0,4.5,.12); }
-  wear(0,0,2.5,.14);
-  g.fillStyle='rgba(0,25,8,.22)'; g.fillRect(0,0,W,Y(-HW)); g.fillRect(0,Y(HW),W,H-Y(HW)); g.fillRect(0,Y(-HW),X(-HL),HW*2*S); g.fillRect(X(HL),Y(-HW),W-X(HL),HW*2*S);
-  g.strokeStyle='rgba(250,250,240,.95)'; g.lineWidth=.12*S; g.lineCap='round'; g.shadowColor='rgba(255,255,255,.55)'; g.shadowBlur=.12*S;
+  // 踏み荒らされた跡（rgb: 色、a: 濃さ）
+  const wear=(x,z,r,a,rgb='150,128,70')=>{ const gr=g.createRadialGradient(X(x),Y(z),0,X(x),Y(z),r*S); gr.addColorStop(0,`rgba(${rgb},${a})`); gr.addColorStop(1,`rgba(${rgb},0)`); g.fillStyle=gr; g.beginPath(); g.ellipse(X(x),Y(z),r*S,r*S*.75,0,0,Math.PI*2); g.fill(); };
+  const goalWear=(k,rgb)=>{ for(const s of [-1,1]){ wear(s*(HL-1.6),0,3.2,.35*k,rgb); wear(s*(HL-8),0,1.6,.22*k,rgb); wear(s*(HL-4),0,4.5,.12*k,rgb); } wear(0,0,2.5,.14*k,rgb); };
+  if(kind==='dirt'){
+    // 土：まだらな地面に小石、ゴール前と中央はえぐれて色が濃い
+    g.fillStyle='#b48a5c'; g.fillRect(0,0,W,H);
+    for(let i=0;i<70;i++){ const x=rnd(-HL-PM,HL+PM), z=rnd(-HW-PM,HW+PM); wear(x,z,rnd(2,6),rnd(.08,.18),Math.random()<.5?'200,165,120':'130,95,60'); }
+    for(let i=0;i<70000;i++){ const a=Math.random(); g.fillStyle=a<.4?'rgba(240,215,170,.12)':a<.85?'rgba(90,60,30,.12)':'rgba(60,50,45,.35)'; const s=1+Math.random()*2.5; g.fillRect(Math.random()*W,Math.random()*H,s,s); }
+    // トンボをかけた跡（横筋）
+    g.fillStyle='rgba(255,235,200,.05)'; for(let y=0;y<H;y+=9) g.fillRect(0,y,W,3);
+    goalWear(1.4,'110,78,48');
+  } else if(kind==='sand'){
+    // 砂：明るいベージュに風紋（細かい波模様）と足跡のくぼみ
+    g.fillStyle='#d4b77c'; g.fillRect(0,0,W,H);
+    for(let i=0;i<60;i++){ const x=rnd(-HL-PM,HL+PM), z=rnd(-HW-PM,HW+PM); wear(x,z,rnd(2,6),rnd(.08,.16),Math.random()<.5?'250,235,200':'190,160,110'); }
+    g.lineWidth=2; for(let y=0;y<H;y+=7){ g.strokeStyle=`rgba(170,135,85,${rnd(.05,.12)})`; g.beginPath(); for(let x=0;x<=W;x+=20) g.lineTo(x,y+Math.sin(x*.012+y*.05)*3); g.stroke(); }
+    for(let i=0;i<50000;i++){ const a=Math.random(); g.fillStyle=a<.5?'rgba(255,248,225,.14)':a<.9?'rgba(150,115,65,.14)':'rgba(110,95,80,.3)'; const s=1+Math.random()*1.8; g.fillRect(Math.random()*W,Math.random()*H,s,s); }
+    goalWear(1.2,'175,140,90');
+  } else if(kind==='snow'){
+    // 雪：青みのある白。踏まれた所は灰色、ゴール前だけ芝が少し見える
+    g.fillStyle='#eef3f8'; g.fillRect(0,0,W,H);
+    for(let i=0;i<60;i++){ const x=rnd(-HL-PM,HL+PM), z=rnd(-HW-PM,HW+PM); wear(x,z,rnd(2,7),rnd(.06,.14),'170,190,215'); }
+    for(let i=0;i<50000;i++){ const a=Math.random(); g.fillStyle=a<.5?'rgba(255,255,255,.5)':'rgba(150,170,200,.1)'; const s=1+Math.random()*2; g.fillRect(Math.random()*W,Math.random()*H,s,s); }
+    goalWear(1,'150,165,185'); for(const s of [-1,1]) wear(s*(HL-1.6),0,1.6,.3,'70,110,60');
+  } else {
+    // 芝：縦の刈り目。lush は色が鮮やかで、横の刈り目も入った格子模様
+    const lush=kind==='lush';
+    g.fillStyle=lush?'#36913f':'#2e7a37'; g.fillRect(0,0,W,H);
+    for(let x=-HL-PM;x<HL+PM;x+=4){ const i=Math.floor((x+HL)/4); g.fillStyle=lush?(i%2?'#48ab50':'#36913f'):(i%2?'#3a9244':'#2f8038'); g.fillRect(X(x),0,4*S+1,H); }
+    for(let z=-HW-PM;z<HW+PM;z+=4){ const i=Math.floor((z+HW)/4); if(i%2){ g.fillStyle=lush?'rgba(255,255,210,.09)':'rgba(255,255,210,.045)'; g.fillRect(0,Y(z),W,4*S+1);} }
+    for(let i=0;i<60000;i++){ const a=Math.random(); g.fillStyle=a<.45?'rgba(255,255,200,.05)':a<.9?'rgba(0,30,5,.08)':'rgba(120,150,40,.08)'; g.fillRect(Math.random()*W,Math.random()*H,1+Math.random()*2,2+Math.random()*4); }
+    goalWear(lush?.35:1);
+  }
+  g.fillStyle=kind==='snow'?'rgba(120,140,170,.12)':kind==='sand'?'rgba(150,115,60,.08)':'rgba(0,25,8,.22)'; g.fillRect(0,0,W,Y(-HW)); g.fillRect(0,Y(HW),W,H-Y(HW)); g.fillRect(0,Y(-HW),X(-HL),HW*2*S); g.fillRect(X(HL),Y(-HW),W-X(HL),HW*2*S);
+  // ライン：雪の上は赤、砂はビーチサッカーの青テープ、土は石灰の白（にじみなし）
+  const lc=kind==='snow'?'#d9473b':kind==='sand'?'#2f6fd6':kind==='dirt'?'rgba(250,250,245,.88)':'rgba(250,250,240,.95)';
+  g.strokeStyle=lc; g.lineWidth=(kind==='dirt'?.15:.12)*S; g.lineCap='round'; g.shadowColor=kind==='grass'||kind==='lush'?'rgba(255,255,255,.55)':'rgba(0,0,0,0)'; g.shadowBlur=.12*S;
   const line=(a,b,c2,d)=>{g.beginPath();g.moveTo(X(a),Y(b));g.lineTo(X(c2),Y(d));g.stroke();};
   g.strokeRect(X(-HL),Y(-HW),HL*2*S,HW*2*S);
   line(0,-HW,0,HW);
   g.beginPath();g.arc(X(0),Y(0),6*S,0,Math.PI*2);g.stroke();
-  g.fillStyle='#fafaf0';
+  g.fillStyle=lc;
   const dot=(x,z)=>{g.beginPath();g.arc(X(x),Y(z),.18*S,0,Math.PI*2);g.fill();};
   dot(0,0);
   for(const s of [-1,1]){
@@ -684,7 +785,10 @@ function grassNormal(){
   g.putImageData(img,0,0);
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); return t;
 }
-const pitchMat=new THREE.MeshStandardMaterial({map:pitchTexture(),roughness:.86,normalMap:grassNormal(),normalScale:new THREE.Vector2(.28,.28),envMapIntensity:.6});
+// ピッチのテクスチャは種類ごとに初回だけ作って使い回す
+const pitchTexCache={};
+const pitchTex=k=>pitchTexCache[k]||(pitchTexCache[k]=pitchTexture(k));
+const pitchMat=new THREE.MeshStandardMaterial({map:pitchTex(STAD.pitch),roughness:.86,normalMap:grassNormal(),normalScale:new THREE.Vector2(.28,.28),envMapIntensity:.6});
 pitchMat.onBeforeCompile=sh=>{ sh.fragmentShader=sh.fragmentShader.replace('vec3 mapN = texture2D( normalMap, vUv ).xyz','vec3 mapN = texture2D( normalMap, vUv * vec2(70.0,50.0) ).xyz'); };
 const pitch=new THREE.Mesh(new THREE.PlaneGeometry(HL*2+PM*2,HW*2+PM*2),pitchMat);
 pitch.rotation.x=-Math.PI/2; pitch.receiveShadow=true; scene.add(pitch);
@@ -692,6 +796,13 @@ const track=new THREE.Mesh(new THREE.PlaneGeometry(HL*2+30,HW*2+30),new THREE.Me
 track.rotation.x=-Math.PI/2; track.position.y=-0.015; track.receiveShadow=true; scene.add(track);
 const outer=new THREE.Mesh(new THREE.CircleGeometry(700,48),new THREE.MeshStandardMaterial({color:col(0x7aa652),roughness:1}));
 outer.rotation.x=-Math.PI/2; outer.position.y=-0.04; outer.receiveShadow=true; scene.add(outer);
+// スタジアムごとに出し分ける建物・景色のまとまり
+const arena=new THREE.Group();     // スタンド・屋根・看板・ベンチ・ビジョン・照明（学校以外）
+const megaG=new THREE.Group();     // メガスタジアムの上層スタンドと大屋根
+const schoolG=new THREE.Group();   // 校舎・フェンス・テント・保護者
+const landG=new THREE.Group();     // 丘と木（海辺以外）
+const seaG=new THREE.Group();      // 砂浜・灯台・ヨット・屋根の旗（海辺）
+scene.add(arena,megaG,schoolG,landG,seaG);
 
 // ---------- goals ----------
 function netTexture(){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.strokeStyle='rgba(255,255,255,1)';g.lineWidth=3;g.strokeRect(1.5,1.5,61,61);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
@@ -742,7 +853,7 @@ function drawBoards(){
 }
 const boardBack=new THREE.MeshStandardMaterial({color:col(0x1b1f26),roughness:.6,metalness:.3});
 function board(len,x,z,ry){
-  const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=ry; scene.add(grp);
+  const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=ry; arena.add(grp);
   const b=new THREE.Mesh(new THREE.BoxGeometry(len,.95,.18),boardBack); b.position.y=.5; b.castShadow=true; b.receiveShadow=true; grp.add(b);
   const t=boardTex.clone(); t.needsUpdate=true; t.repeat.x=len/14;
   const face=new THREE.Mesh(new THREE.PlaneGeometry(len,.8),new THREE.MeshStandardMaterial({map:t,emissive:0xffffff,emissiveMap:t,emissiveIntensity:.9,roughness:.35,metalness:0}));
@@ -759,12 +870,12 @@ const concreteDark=new THREE.MeshStandardMaterial({color:col(0xa9a294),roughness
 const wallPaint=new THREE.MeshStandardMaterial({color:col(0x1c2b5a),roughness:.55,metalness:.1});
 const stepEdge=new THREE.MeshStandardMaterial({color:col(0xf2ead8),roughness:.8});
 function stand(o){
-  const g=new THREE.Group(); g.position.set(o.cx,0,o.cz); g.rotation.y=o.ry; scene.add(g);
+  const g=new THREE.Group(); g.position.set(o.cx,0,o.cz); g.rotation.y=o.ry; (o.parent||arena).add(g);
   for(let k=0;k<o.rows;k++){
     const top=o.base+k*o.rise, zc=-(k+.5)*o.step;
     const m=new THREE.Mesh(new THREE.BoxGeometry(o.len,top,o.step),k%2?concrete:concreteDark); m.position.set(0,top/2,zc); m.receiveShadow=true; g.add(m);
     const e=new THREE.Mesh(new THREE.BoxGeometry(o.len,.06,.08),stepEdge); e.position.set(0,top+.03,zc+o.step/2-.04); g.add(e);
-    for(let x=-o.len/2+.6;x<=o.len/2-.6;x+=.74){ if(Math.abs(((x+o.len/2)%14)-7)<.5) continue; seats.push({g,lx:x+rnd(-.05,.05),ly:top,lz:zc+.05,ry:o.ry,fan:o.fan(x,k)}); }
+    for(let x=-o.len/2+.6;x<=o.len/2-.6;x+=.74){ if(Math.abs(((x+o.len/2)%14)-7)<.5) continue; (o.seats||seats).push({g,lx:x+rnd(-.05,.05),ly:top,lz:zc+.05,ry:o.ry,fan:o.fan(x,k)}); }
   }
   const fw=new THREE.Mesh(new THREE.BoxGeometry(o.len,o.base,.14),wallPaint); fw.position.set(0,o.base/2,.07); g.add(fw);
   const H=o.base+o.rows*o.rise+1.4, D=o.rows*o.step;
@@ -778,61 +889,93 @@ const HOME=[BRIKI.shirt,BRIKI.shirt,0xf1e4c3,0x14245a], AWAY=['a0','a0','a2','a3
 // CPU側サポーターの色（a0〜a3 → CPUチームの配色）
 const fanCol=f=>{ if(typeof f!=='string') return f; const T1=TEAMS[1]; return [T1.shirt,T1.shirt,T1.fan2,T1.shorts][+f[1]]; };
 const pick=a=>a[(Math.random()*a.length)|0];
-const mainStand=stand({len:HL*2+10,rows:10,step:1,rise:.62,base:1.1,cx:0,cz:-(HW+4.4),ry:0,fan:(x,k)=>{
+// スタンドは2種類：fullG＝メガスタジアムの下層（上層スタンドがこの高さに合わせて載る）、simpleG＝ふだんの低くて簡素なスタンド（屋根なし）
+const fullG=new THREE.Group(), simpleG=new THREE.Group(); arena.add(fullG,simpleG);
+const mainFan=(x,k)=>{
   if(x<-HL+6) return ((k+Math.floor(x/1.5))&1)?BRIKI.shirt:0xf1e4c3;
   if(x>HL-6) return ((k+Math.floor(x/1.5))&1)?'a0':'a2';
-  return pick(MIX);}});
-stand({len:HL*2+10,rows:4,step:1,rise:.55,base:1.1,cx:0,cz:HW+4.4,ry:Math.PI,fan:()=>pick(MIX)});
-stand({len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:HL+5.2,cz:0,ry:-Math.PI/2,fan:(x,k)=>k%3===2?'a2':pick(AWAY)});
-stand({len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:-(HL+5.2),cz:0,ry:Math.PI/2,fan:(x,k)=>k%3===2?0xf1e4c3:pick(HOME)});
+  return pick(MIX);};
+const awayFan=(x,k)=>k%3===2?'a2':pick(AWAY), homeFan=(x,k)=>k%3===2?0xf1e4c3:pick(HOME);
+const mainStand=stand({parent:fullG,len:HL*2+10,rows:10,step:1,rise:.62,base:1.1,cx:0,cz:-(HW+4.4),ry:0,fan:mainFan});
+stand({parent:fullG,len:HL*2+10,rows:4,step:1,rise:.55,base:1.1,cx:0,cz:HW+4.4,ry:Math.PI,fan:()=>pick(MIX)});
+stand({parent:fullG,len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:HL+5.2,cz:0,ry:-Math.PI/2,fan:awayFan});
+stand({parent:fullG,len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:-(HL+5.2),cz:0,ry:Math.PI/2,fan:homeFan});
+const simpleSeats=[], SS={parent:simpleG,seats:simpleSeats};
+const simpleMain=stand({...SS,len:HL*2+10,rows:5,step:1,rise:.55,base:1.1,cx:0,cz:-(HW+4.4),ry:0,fan:mainFan});
+stand({...SS,len:HL*2+10,rows:3,step:1,rise:.5,base:1.1,cx:0,cz:HW+4.4,ry:Math.PI,fan:()=>pick(MIX)});
+stand({...SS,len:HW*2+6,rows:4,step:1.1,rise:.55,base:1.1,cx:HL+5.2,cz:0,ry:-Math.PI/2,fan:awayFan});
+stand({...SS,len:HW*2+6,rows:4,step:1.1,rise:.55,base:1.1,cx:-(HL+5.2),cz:0,ry:Math.PI/2,fan:homeFan});
 
-// main stand roof with lit fascia
-(function(){
-  const g=mainStand.g, len=HL*2+14, D=mainStand.D, y=mainStand.H+4.2;
-  const roofM=new THREE.MeshStandardMaterial({color:col(0xf1f1ee),roughness:.4,metalness:.4});
-  const under=new THREE.MeshStandardMaterial({color:col(0x4a4f58),roughness:.7,metalness:.3});
-  const roof=new THREE.Mesh(new THREE.BoxGeometry(len,.3,D+3.5),[roofM,roofM,roofM,under,roofM,roofM]); roof.position.set(0,y,-D/2+1); roof.rotation.x=-.06; roof.castShadow=true; g.add(roof);
-  const fc=document.createElement('canvas'); fc.width=2048; fc.height=64; const x=fc.getContext('2d');
+// 屋根の正面のスタジアム名（メインスタンドとメガスタジアムの大屋根で共用）
+const fasciaCanvas=document.createElement('canvas'); fasciaCanvas.width=2048; fasciaCanvas.height=64;
+const fasciaTex=new THREE.CanvasTexture(fasciaCanvas); fasciaTex.encoding=THREE.sRGBEncoding;
+function drawFascia(){
+  const x=fasciaCanvas.getContext('2d');
   x.fillStyle='#14235a'; x.fillRect(0,0,2048,64); x.fillStyle='#ffd23f'; x.font="40px 'Dela Gothic One', sans-serif"; x.textAlign='center'; x.textBaseline='middle';
-  const drawF=()=>{ x.fillStyle='#14235a'; x.fillRect(0,0,2048,64); x.fillStyle='#ffd23f'; for(const px of [340,1024,1708]) x.fillText('TOY EIGHT STADIUM',px,36); ft.needsUpdate=true; };
-  const ft=new THREE.CanvasTexture(fc); ft.encoding=THREE.sRGBEncoding; drawF();
-  if(document.fonts) document.fonts.load("40px 'Dela Gothic One'").then(drawF).catch(()=>{});
-  const fascia=new THREE.Mesh(new THREE.BoxGeometry(len,1.1,.3),new THREE.MeshStandardMaterial({map:ft,emissive:0xffffff,emissiveMap:ft,emissiveIntensity:.5,roughness:.5}));
+  for(const px of [340,1024,1708]) x.fillText(STAD.fascia||'',px,36);
+  fasciaTex.needsUpdate=true;
+}
+drawFascia(); if(document.fonts) document.fonts.load("40px 'Dela Gothic One'").then(drawFascia).catch(()=>{});
+const fasciaMat=new THREE.MeshStandardMaterial({map:fasciaTex,emissive:0xffffff,emissiveMap:fasciaTex,emissiveIntensity:.5,roughness:.5});
+const roofM=new THREE.MeshStandardMaterial({color:col(0xf1f1ee),roughness:.4,metalness:.4});
+const roofUnder=new THREE.MeshStandardMaterial({color:col(0x4a4f58),roughness:.7,metalness:.3});
+const roofCol=new THREE.MeshStandardMaterial({color:col(0xe9e9e6),roughness:.35,metalness:.6});
+const roofLight=new THREE.MeshBasicMaterial({color:new THREE.Color(3.2,3.1,2.8)});
+// 屋根一式（屋根板・名前の帯・照明・柱）を g に作る。y: 高さ、D: スタンドの奥行き
+function buildRoof(g,len,D,y,colStep=11){
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(len,.3,D+3.5),[roofM,roofM,roofM,roofUnder,roofM,roofM]); roof.position.set(0,y,-D/2+1); roof.rotation.x=-.06; roof.castShadow=true; g.add(roof);
+  const fascia=new THREE.Mesh(new THREE.BoxGeometry(len,1.1,.3),fasciaMat);
   fascia.position.set(0,y-.05+(D/2+2.75)*.06,2.75); g.add(fascia);
-  const lights=new THREE.Mesh(new THREE.BoxGeometry(len-2,.12,.5),new THREE.MeshBasicMaterial({color:new THREE.Color(3.2,3.1,2.8)}));
+  const lights=new THREE.Mesh(new THREE.BoxGeometry(len-2,.12,.5),roofLight);
   lights.position.set(0,fascia.position.y-.62,2.3); g.add(lights);
-  const colM=new THREE.MeshStandardMaterial({color:col(0xe9e9e6),roughness:.35,metalness:.6});
-  for(let px=-len/2+4;px<=len/2-4;px+=11){
-    const c=new THREE.Mesh(new THREE.CylinderGeometry(.18,.24,y,12),colM); c.position.set(px,y/2,-D-.2); c.castShadow=true; g.add(c);
-    const tr=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,D+3,8),colM); tr.rotation.x=Math.PI/2-.42; tr.position.set(px,y+1.6,-D/2+.5); g.add(tr);
+  for(let px=-len/2+4;px<=len/2-4;px+=colStep){
+    const c=new THREE.Mesh(new THREE.CylinderGeometry(.18,.24,y,12),roofCol); c.position.set(px,y/2,-D-.2); c.castShadow=true; g.add(c);
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,D+3,8),roofCol); tr.rotation.x=Math.PI/2-.42; tr.position.set(px,y+1.6,-D/2+.5); g.add(tr);
   }
-})();
+}
+
 
 // crowd (peg-doll fans)
-const crowdN=Math.floor(seats.length*.9);
-const seatMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.42),new THREE.MeshStandardMaterial({roughness:.5}),seats.length);
-const crowdBody=new THREE.InstancedMesh(new THREE.LatheGeometry([[0,0],[.2,0],[.23,.12],[.22,.4],[.15,.55],[0,.58]].map(p=>new THREE.Vector2(p[0],p[1])),12),new THREE.MeshPhysicalMaterial({roughness:.4,clearcoat:.5}),crowdN);
-const crowdHead=new THREE.InstancedMesh(new THREE.SphereGeometry(.17,12,10),new THREE.MeshPhysicalMaterial({roughness:.4,clearcoat:.4}),crowdN);
+// 観客の集団を作る。list: 立ち位置（スタンドの席なら g と lx/ly/lz、地面なら x/y/z）、parent: 表示を切り替えるグループ
+const crowds=[];
+const seatGeo=new THREE.BoxGeometry(.5,.32,.42), seatMat=new THREE.MeshStandardMaterial({roughness:.5});
+const fanGeo=new THREE.LatheGeometry([[0,0],[.2,0],[.23,.12],[.22,.4],[.15,.55],[0,.58]].map(p=>new THREE.Vector2(p[0],p[1])),12);
+const fanMat=new THREE.MeshPhysicalMaterial({roughness:.4,clearcoat:.5});
+const fanHeadGeo=new THREE.SphereGeometry(.17,12,10), fanHeadMat=new THREE.MeshPhysicalMaterial({roughness:.4,clearcoat:.4});
 const skinCols=[0xf3cba5,0xe0a77f,0xa8714b,0x7a4a2e,0xf6dcc4].map(col);
 const seatCol=[col(0x1f3f8f),col(0x2a4fa8)];
-const crowdPhase=new Float32Array(crowdN), crowdIdx=[];
 const dummy=new THREE.Object3D(), wp=new THREE.Vector3();
-seats.forEach((s,i)=>{ s.g.localToWorld(wp.set(s.lx,s.ly,s.lz)); s.x=wp.x; s.y=wp.y; s.z=wp.z;
-  dummy.position.set(s.x,s.y+.16,s.z); dummy.rotation.set(0,s.ry,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); seatMesh.setMatrixAt(i,dummy.matrix); seatMesh.setColorAt(i,seatCol[i&1]); });
-for(let i=seats.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [seats[i],seats[j]]=[seats[j],seats[i]]; }
-for(let i=0;i<crowdN;i++){ crowdPhase[i]=Math.random()*6.28; crowdBody.setColorAt(i,col(fanCol(seats[i].fan))); crowdHead.setColorAt(i,skinCols[(Math.random()*skinCols.length)|0]); seats[i].sc=rnd(.88,1.1); }
-seatMesh.receiveShadow=true; crowdBody.receiveShadow=true;
-function placeCrowd(jump,t=0){
-  for(let i=0;i<crowdN;i++){
-    const s=seats[i]; const j=(jump?Math.abs(Math.sin(t*9+crowdPhase[i]))*.45*jump:0)+(HQ?Math.max(0,Math.sin(t*1.7+crowdPhase[i]))*.025:0);
-    dummy.rotation.set(0,s.ry+Math.sin(t*.8+crowdPhase[i])*.15,0); dummy.scale.setScalar(s.sc);
-    dummy.position.set(s.x,s.y+.05+j,s.z); dummy.updateMatrix(); crowdBody.setMatrixAt(i,dummy.matrix);
-    dummy.position.y=s.y+.05+.7*s.sc+j; dummy.updateMatrix(); crowdHead.setMatrixAt(i,dummy.matrix);
+function makeCrowd(list,parent,withSeats=true){
+  const n=list.length;
+  list.forEach(s=>{ if(s.g){ s.g.localToWorld(wp.set(s.lx,s.ly,s.lz)); s.x=wp.x; s.y=wp.y; s.z=wp.z; } });
+  if(withSeats){
+    const seatMesh=new THREE.InstancedMesh(seatGeo,seatMat,n);
+    list.forEach((s,i)=>{ dummy.position.set(s.x,s.y+.16,s.z); dummy.rotation.set(0,s.ry,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); seatMesh.setMatrixAt(i,dummy.matrix); seatMesh.setColorAt(i,seatCol[i&1]); });
+    seatMesh.receiveShadow=true; parent.add(seatMesh);
   }
-  crowdBody.instanceMatrix.needsUpdate=crowdHead.instanceMatrix.needsUpdate=true;
+  // 並びを混ぜておくと、表示数（count）を減らしたときに空席がまばらに散らばる
+  for(let i=n-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [list[i],list[j]]=[list[j],list[i]]; }
+  const body=new THREE.InstancedMesh(fanGeo,fanMat,n), head=new THREE.InstancedMesh(fanHeadGeo,fanHeadMat,n), phase=new Float32Array(n);
+  for(let i=0;i<n;i++){ phase[i]=Math.random()*6.28; body.setColorAt(i,col(fanCol(list[i].fan))); head.setColorAt(i,skinCols[(Math.random()*skinCols.length)|0]); list[i].sc=rnd(.88,1.1); }
+  body.receiveShadow=true; parent.add(body,head);
+  const c={list,body,head,phase,n,parent}; crowds.push(c); placeCrowdOf(c,0,0); return c;
 }
-placeCrowd(0); scene.add(seatMesh,crowdBody,crowdHead);
-function recolorCrowd(){ for(let i=0;i<crowdN;i++) if(typeof seats[i].fan==='string') crowdBody.setColorAt(i,col(fanCol(seats[i].fan))); crowdBody.instanceColor.needsUpdate=true; }
+// 観客の入り具合（0〜1）
+function setCrowdDensity(c,r){ c.body.count=c.head.count=Math.floor(c.n*r); }
+function placeCrowdOf(c,jump,t){
+  const {list,body,head,phase}=c;
+  for(let i=0;i<body.count;i++){
+    const s=list[i]; const j=(jump?Math.abs(Math.sin(t*9+phase[i]))*.45*jump:0)+(HQ?Math.max(0,Math.sin(t*1.7+phase[i]))*.025:0);
+    dummy.rotation.set(0,s.ry+Math.sin(t*.8+phase[i])*.15,0); dummy.scale.setScalar(s.sc);
+    dummy.position.set(s.x,s.y+.05+j,s.z); dummy.updateMatrix(); body.setMatrixAt(i,dummy.matrix);
+    dummy.position.y=s.y+.05+.7*s.sc+j; dummy.updateMatrix(); head.setMatrixAt(i,dummy.matrix);
+  }
+  body.instanceMatrix.needsUpdate=head.instanceMatrix.needsUpdate=true;
+}
+// 表示中の観客だけ動かす
+function placeCrowd(jump,t=0){ for(const c of crowds) if(c.parent.visible) placeCrowdOf(c,jump,t); }
+const mainCrowd=makeCrowd(seats,fullG), simpleCrowd=makeCrowd(simpleSeats,simpleG);
+function recolorCrowd(){ for(const c of crowds){ for(let i=0;i<c.n;i++) if(typeof c.list[i].fan==='string') c.body.setColorAt(i,col(fanCol(c.list[i].fan))); c.body.instanceColor.needsUpdate=true; } }
 
 // dugouts on the far touchline
 let cpuBenchMat=null;  // CPU側ベンチの色（チーム変更時に塗り直す）
@@ -840,7 +983,7 @@ let cpuBenchMat=null;  // CPU側ベンチの色（チーム変更時に塗り直
   const glass=new THREE.MeshStandardMaterial({color:col(0xcfe6ff),roughness:.08,metalness:.1,transparent:true,opacity:.32});
   const frame=new THREE.MeshStandardMaterial({color:col(0xe9e9e6),roughness:.35,metalness:.6});
   [[-7,BRIKI.shirt],[7,TEAMS[1].shirt]].forEach(([x,c],k)=>{
-    const g=new THREE.Group(); g.position.set(x,0,-(HW+3.35)); scene.add(g);
+    const g=new THREE.Group(); g.position.set(x,0,-(HW+3.35)); arena.add(g);
     const base=new THREE.Mesh(new THREE.BoxGeometry(6,.12,1.7),frame); base.position.y=.06; g.add(base);
     const back=new THREE.Mesh(new THREE.BoxGeometry(6,1.7,.06),glass); back.position.set(0,.95,-.8); g.add(back);
     const roof=new THREE.Mesh(new THREE.BoxGeometry(6,.06,1.9),glass); roof.position.set(0,1.82,-.05); roof.rotation.x=-.12; g.add(roof);
@@ -870,7 +1013,7 @@ function drawScoreboard(){
   const frameM=new THREE.MeshStandardMaterial({color:col(0x20242c),roughness:.5,metalness:.5});
   const scr=new THREE.MeshStandardMaterial({color:0x000000,emissive:0xffffff,emissiveMap:sbTex,emissiveIntensity:1.25,roughness:.3});
   for(const s of [-1,1]){
-    const g=new THREE.Group(); g.position.set(s*(HL+5.2+7*1.1+.9),0,0); g.rotation.y=s>0?-Math.PI/2:Math.PI/2; scene.add(g);
+    const g=new THREE.Group(); g.position.set(s*(HL+5.2+7*1.1+.9),0,0); g.rotation.y=s>0?-Math.PI/2:Math.PI/2; arena.add(g);
     for(const lx of [-3.2,3.2]){ const leg=new THREE.Mesh(new THREE.BoxGeometry(.4,8.6,.4),frameM); leg.position.set(lx,4.3,-.3); g.add(leg); }
     const f=new THREE.Mesh(new THREE.BoxGeometry(10.2,4.4,.5),frameM); f.position.set(0,10.2,-.3); f.castShadow=true; g.add(f);
     const p=new THREE.Mesh(new THREE.PlaneGeometry(9.6,3.75),scr); p.position.set(0,10.2,-.04); g.add(p);
@@ -884,32 +1027,337 @@ function drawScoreboard(){
   const lg=new THREE.CircleGeometry(.32,16);
   for(const sx of [-1,1]) for(const sz of [-1,1]){
     const x=sx*(HL+10), z=sz*(HW+10);
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.28,.6,26,14),m); pole.position.set(x,13,z); pole.castShadow=true; scene.add(pole);
-    const head=new THREE.Group(); head.position.set(x,26.5,z); head.lookAt(0,2,0); scene.add(head);
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.28,.6,26,14),m); pole.position.set(x,13,z); pole.castShadow=true; arena.add(pole);
+    const head=new THREE.Group(); head.position.set(x,26.5,z); head.lookAt(0,2,0); arena.add(head);
     const panel=new THREE.Mesh(new THREE.BoxGeometry(6,3.4,.4),new THREE.MeshStandardMaterial({color:col(0x2b2f37),roughness:.5,metalness:.5})); head.add(panel);
     for(let i=0;i<5;i++) for(let j=0;j<3;j++){ const l=new THREE.Mesh(lg,lamp); l.position.set(-2.3+i*1.15,-1.05+j*1.05,.21); head.add(l); }
   }
 })();
 
-// toy landscape: rolling hills and lollipop trees
+// toy landscape: rolling hills and lollipop trees（雪のときは白く塗り替える）
+const hillMats=[], hillCols=[0x5f9446,0x6fa54f,0x82b55a,0x568a40];
+const treeCols=[0x3f8f3f,0x5aa543,0x2f7a3a,0x7dbb4a,0x4c9a3c].map(col), snowTreeCols=[0xe8eef0,0xdfe9e4,0xf2f5f6].map(col);
+const treeN=170, treeCrown=new THREE.InstancedMesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshPhysicalMaterial({roughness:.45,clearcoat:.6}),treeN);
 (function(){
-  const hillCols=[0x5f9446,0x6fa54f,0x82b55a,0x568a40];
   for(let i=0;i<14;i++){ const a=i/14*Math.PI*2+rnd(-.15,.15), R=rnd(330,420), r=rnd(80,130);
-    const h=new THREE.Mesh(new THREE.SphereGeometry(r,28,14),new THREE.MeshStandardMaterial({color:col(hillCols[i%4]),roughness:1}));
-    h.scale.y=rnd(.22,.38); h.position.set(Math.cos(a)*R,-r*.05,Math.sin(a)*R); scene.add(h); }
-  const N=170, trunk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.22,.32,2.4,8),new THREE.MeshStandardMaterial({color:col(0x7a5236),roughness:.8}),N);
-  const crown=new THREE.InstancedMesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshPhysicalMaterial({roughness:.45,clearcoat:.6}),N);
-  const tc=[0x3f8f3f,0x5aa543,0x2f7a3a,0x7dbb4a,0x4c9a3c].map(col);
-  for(let i=0;i<N;i++){ let x,z; do{ const a=Math.random()*Math.PI*2, R=rnd(62,200); x=Math.cos(a)*R; z=Math.sin(a)*R; }while(Math.abs(x)<56&&Math.abs(z)<46);
+    const m=new THREE.MeshStandardMaterial({color:col(hillCols[i%4]),roughness:1}); hillMats.push(m);
+    const h=new THREE.Mesh(new THREE.SphereGeometry(r,28,14),m);
+    h.scale.y=rnd(.22,.38); h.position.set(Math.cos(a)*R,-r*.05,Math.sin(a)*R); landG.add(h); }
+  const N=treeN, trunk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.22,.32,2.4,8),new THREE.MeshStandardMaterial({color:col(0x7a5236),roughness:.8}),N);
+  const crown=treeCrown;
+  for(let i=0;i<N;i++){ let x,z; do{ const a=Math.random()*Math.PI*2, R=rnd(62,200); x=Math.cos(a)*R; z=Math.sin(a)*R; }while(Math.abs(x)<58&&Math.abs(z)<50);
     const s=rnd(.9,1.6); dummy.rotation.set(0,0,0); dummy.scale.set(s,s,s); dummy.position.set(x,1.2*s,z); dummy.updateMatrix(); trunk.setMatrixAt(i,dummy.matrix);
-    const cs=rnd(1.8,2.8)*s; dummy.scale.set(cs,cs*1.1,cs); dummy.position.set(x,2.4*s+cs*.9,z); dummy.updateMatrix(); crown.setMatrixAt(i,dummy.matrix); crown.setColorAt(i,tc[i%5]); }
-  trunk.castShadow=crown.castShadow=true; scene.add(trunk,crown);
+    const cs=rnd(1.8,2.8)*s; dummy.scale.set(cs,cs*1.1,cs); dummy.position.set(x,2.4*s+cs*.9,z); dummy.updateMatrix(); crown.setMatrixAt(i,dummy.matrix); crown.setColorAt(i,treeCols[i%5]); }
+  trunk.castShadow=crown.castShadow=true; landG.add(trunk,crown);
+})();
+function paintLand(snow){
+  hillMats.forEach((m,i)=>m.color.copy(col(snow?0xf0f3f7:hillCols[i%4])));
+  for(let i=0;i<treeN;i++) treeCrown.setColorAt(i,snow?snowTreeCols[i%3]:treeCols[i%5]);
+  treeCrown.instanceColor.needsUpdate=true;
+}
+
+// ---------- メガスタジアム：上層スタンドと大屋根 ----------
+const megaSeats=[], megaStands={};
+(function(){
+  const S={seats:megaSeats,parent:megaG};
+  // メインスタンドの後ろ（試合中の背景になる面）
+  const up=megaStands.main=stand({...S,len:HL*2+14,rows:12,step:1,rise:.72,base:9.6,cx:0,cz:-(HW+4.4+10.8),ry:0,fan:(x,k)=>{
+    if(x<-HL+4) return ((k+Math.floor(x/1.5))&1)?BRIKI.shirt:0xf1e4c3;
+    if(x>HL-4) return ((k+Math.floor(x/1.5))&1)?'a0':'a2';
+    return pick(MIX);}});
+  megaStands.back=stand({...S,len:HL*2+10,rows:10,step:1,rise:.72,base:5.6,cx:0,cz:HW+4.4+4.8,ry:Math.PI,fan:()=>pick(MIX)});
+  // ゴール裏の上層はビジョンの上から始まる
+  stand({...S,len:HW*2+6,rows:7,step:1.1,rise:.75,base:12.8,cx:HL+5.2+9.6,cz:0,ry:-Math.PI/2,fan:(x,k)=>k%3===2?'a2':pick(AWAY)});
+  megaStands.home=stand({...S,len:HW*2+6,rows:7,step:1.1,rise:.75,base:12.8,cx:-(HL+5.2+9.6),cz:0,ry:Math.PI/2,fan:(x,k)=>k%3===2?0xf1e4c3:pick(HOME)});
+  // 上層と下層をまとめて覆う大屋根（前の縁は下層スタンドの最前列あたりまで張り出す）
+  const rg=new THREE.Group(); rg.position.set(0,0,10.6); up.g.add(rg);
+  buildRoof(rg,HL*2+20,up.D+10.6,up.H+3.4,10);
+})();
+const megaCrowd=makeCrowd(megaSeats,megaG);
+
+
+// ---------- 学校のグラウンド：校舎・時計・朝礼台・防球ネット・テント・保護者 ----------
+(function(){
+  const wallM=new THREE.MeshStandardMaterial({color:col(0xefe6d2),roughness:.85});
+  const trimM=new THREE.MeshStandardMaterial({color:col(0xc9bda3),roughness:.8});
+  const metalM=new THREE.MeshStandardMaterial({color:col(0xd5d8dc),roughness:.35,metalness:.6});
+  // 校舎の正面：3階建ての窓の並び
+  const wc=document.createElement('canvas'); wc.width=2048; wc.height=256; const g=wc.getContext('2d');
+  g.fillStyle='#efe6d2'; g.fillRect(0,0,2048,256);
+  for(let f=0;f<3;f++){
+    const y0=20+f*78;
+    g.fillStyle='#d8ccb2'; g.fillRect(0,y0+62,2048,6);
+    for(let i=0;i<30;i++){ const x0=14+i*68;
+      const gr=g.createLinearGradient(0,y0,0,y0+52); gr.addColorStop(0,'#cfe2f0'); gr.addColorStop(1,'#7fa3c2');
+      g.fillStyle='#fbfaf6'; g.fillRect(x0-3,y0-3,52,58); g.fillStyle=gr; g.fillRect(x0,y0,46,52);
+      if(Math.random()<.3){ g.fillStyle=pick(['#f3e3a0','#e9b8a8','#cfe6c8']); g.fillRect(x0,y0,Math.random()<.5?14:46,52); } // カーテン
+      g.fillStyle='#fbfaf6'; g.fillRect(x0+21,y0,4,52); g.fillRect(x0,y0+24,46,3);
+    }
+  }
+  const wt=new THREE.CanvasTexture(wc); wt.encoding=THREE.sRGBEncoding;
+  const front=new THREE.MeshStandardMaterial({map:wt,roughness:.7});
+  const bz=-(HW+20);
+  const bld=new THREE.Mesh(new THREE.BoxGeometry(86,11,10),[wallM,wallM,trimM,wallM,front,wallM]); bld.position.set(0,5.5,bz); bld.castShadow=bld.receiveShadow=true; schoolG.add(bld);
+  const parapet=new THREE.Mesh(new THREE.BoxGeometry(86.6,.5,10.6),trimM); parapet.position.set(0,11.2,bz); schoolG.add(parapet);
+  // 中央の時計塔
+  const tower=new THREE.Mesh(new THREE.BoxGeometry(8,15.5,10.6),wallM); tower.position.set(0,7.75,bz+.4); tower.castShadow=true; schoolG.add(tower);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(8.6,.6,11.2),trimM); cap.position.set(0,15.8,bz+.4); schoolG.add(cap);
+  const cc=document.createElement('canvas'); cc.width=cc.height=128; const x=cc.getContext('2d');
+  x.fillStyle='#fbfaf6'; x.beginPath(); x.arc(64,64,60,0,Math.PI*2); x.fill(); x.lineWidth=6; x.strokeStyle='#1f2a44'; x.stroke();
+  x.fillStyle='#1f2a44'; for(let i=0;i<12;i++){ const a=i/12*Math.PI*2; x.fillRect(64+Math.sin(a)*48-3,64-Math.cos(a)*48-3,6,6); }
+  // 針は放課後の3時半
+  x.strokeStyle='#1f2a44'; x.lineCap='round'; x.lineWidth=7; x.beginPath(); x.moveTo(64,64); x.lineTo(64+30*Math.sin(Math.PI*2*3.5/12),64-30*Math.cos(Math.PI*2*3.5/12)); x.stroke();
+  x.lineWidth=4; x.beginPath(); x.moveTo(64,64); x.lineTo(64,108); x.stroke();
+  const ct=new THREE.CanvasTexture(cc); ct.encoding=THREE.sRGBEncoding;
+  const clock=new THREE.Mesh(new THREE.CircleGeometry(2.6,32),new THREE.MeshStandardMaterial({map:ct,roughness:.5})); clock.position.set(0,12.6,bz+5.75); schoolG.add(clock);
+  // 朝礼台
+  const dais=new THREE.Group(); dais.position.set(0,0,-(HW+4.2)); schoolG.add(dais);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(2.6,.14,1.8),new THREE.MeshStandardMaterial({color:col(0x3f8f5a),roughness:.6})); top.position.y=1.15; top.castShadow=true; dais.add(top);
+  for(const sx of [-1,1]) for(const sz of [-1,1]){ const l=new THREE.Mesh(new THREE.BoxGeometry(.1,1.1,.1),metalM); l.position.set(sx*1.2,.55,sz*.8); dais.add(l); }
+  for(let i=0;i<3;i++){ const st=new THREE.Mesh(new THREE.BoxGeometry(1,.08,.35),metalM); st.position.set(0,.3+i*.28,1.05+(2-i)*.3); dais.add(st); }
+  // ゴール裏の防球ネット（緑）
+  const nt=netBase.clone(); nt.needsUpdate=true; nt.repeat.set(46/.3,6/.3);
+  const netM=new THREE.MeshStandardMaterial({map:nt,transparent:true,alphaTest:.35,side:THREE.DoubleSide,roughness:.8,color:col(0x2f6b3a)});
+  for(const s of [-1,1]){
+    const n=new THREE.Mesh(new THREE.PlaneGeometry(46,6),netM); n.rotation.y=Math.PI/2; n.position.set(s*(HL+6),3,0); schoolG.add(n);
+    for(let z=-23;z<=23;z+=5.75){ const pl=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,6.2,8),metalM); pl.position.set(s*(HL+6),3.1,z); pl.castShadow=true; schoolG.add(pl); }
+  }
+  // 鉄棒（高さ違いで3台）
+  { const b=new THREE.Group(); b.position.set(HL+1,0,-(HW+6)); schoolG.add(b);
+    for(let i=0;i<4;i++){ const h=1.1+i*.2, pl=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,h,8),metalM); pl.position.set(i*1.6-2.4,h/2,0); b.add(pl);
+      if(i<3){ const bar=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,1.6,8),metalM); bar.rotation.z=Math.PI/2; bar.position.set(i*1.6-1.6,h-.05,0); b.add(bar); } } }
+  // 保護者用のテント（青い三角屋根）
+  const tentM=new THREE.MeshStandardMaterial({color:col(0x2f6fd6),roughness:.6}), valM=new THREE.MeshStandardMaterial({color:col(0xf6f6f2),roughness:.6});
+  const tents=[-14,13];
+  for(const tx of tents){
+    const t=new THREE.Group(); t.position.set(tx,0,-(HW+5.4)); schoolG.add(t);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(3.6,1.1,4),tentM); roof.rotation.y=Math.PI/4; roof.scale.set(1.05,1,.8); roof.position.y=3.05; roof.castShadow=true; t.add(roof);
+    const val=new THREE.Mesh(new THREE.BoxGeometry(5.3,.3,4.1),valM); val.position.y=2.35; t.add(val);
+    for(const sx of [-1,1]) for(const sz of [-1,1]){ const l=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,2.5,8),metalM); l.position.set(sx*2.55,1.25,sz*1.95); t.add(l); }
+  }
+  // 保護者：テントの下とタッチライン沿いにぽつぽつ（ピッチの方を向く）
+  const casual=[0xe4572e,0x4f86c6,0xf2d04b,0x7bc47f,0xf6f6f2,0x9b6bcc,0x5b5f66,BRIKI.shirt,'a0'];
+  const spots=[], add=(x,z)=>spots.push({x,y:0,z,ry:Math.atan2(-x*.15,-z),fan:pick(casual)});
+  for(const tx of tents) for(let i=0;i<7;i++) add(tx+rnd(-2.2,2.2),-(HW+5.4)+rnd(-1.4,1.4));
+  for(let i=0;i<12;i++) add(rnd(-HL+2,HL-2),-(HW+2.6+rnd(0,.8)));
+  for(let i=0;i<9;i++) add(rnd(-HL+2,HL-2),HW+2.6+rnd(0,1));
+  for(const s of [-1,1]) for(let i=0;i<3;i++) add(s*(HL+3.4+rnd(0,1.5)),rnd(-14,14));
+  makeCrowd(spots,schoolG,false);
 })();
 
+// ---------- 海辺：砂浜・灯台・ヨット・屋根の旗 ----------
+const boats=[], roofFlags=[];
+(function(){
+  const sand=new THREE.Mesh(new THREE.CircleGeometry(92,48),new THREE.MeshStandardMaterial({color:col(0xe9d6a6),roughness:1}));
+  sand.rotation.x=-Math.PI/2; sand.position.y=-.03; sand.receiveShadow=true; seaG.add(sand);
+  // 灯台（赤白のしま）
+  const lh=new THREE.Group(); lh.position.set(-70,0,-150); seaG.add(lh);
+  const rock=new THREE.Mesh(new THREE.SphereGeometry(10,16,10),new THREE.MeshStandardMaterial({color:col(0x8a8378),roughness:1})); rock.scale.y=.35; lh.add(rock);
+  const red=new THREE.MeshStandardMaterial({color:col(0xd9473b),roughness:.5}), white=new THREE.MeshStandardMaterial({color:col(0xf6f4ee),roughness:.5});
+  for(let i=0;i<5;i++){ const r0=2.4-i*.3, seg=new THREE.Mesh(new THREE.CylinderGeometry(r0-.3,r0,4,20),i%2?white:red); seg.position.y=3+i*4; lh.add(seg); }
+  const lamp=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,1.6,16),new THREE.MeshBasicMaterial({color:new THREE.Color(3,2.7,1.6)})); lamp.position.y=23; lh.add(lamp);
+  const hat=new THREE.Mesh(new THREE.ConeGeometry(1.6,1.6,16),red); hat.position.y=24.6; lh.add(hat);
+  // ヨット（波に合わせて揺らす）
+  const hullM=new THREE.MeshPhysicalMaterial({color:col(0xf6f4ee),roughness:.3,clearcoat:.8});
+  const sailMs=[0xffffff,0xffd23f,0xe6483b].map(c=>new THREE.MeshStandardMaterial({color:col(c),roughness:.6,side:THREE.DoubleSide}));
+  const sailGeo=new THREE.BufferGeometry(); sailGeo.setAttribute('position',new THREE.Float32BufferAttribute([0,.6,0, 0,6,0, 3.2,.6,0],3)); sailGeo.computeVertexNormals();
+  [[60,-130],[-130,-90],[150,-60],[110,140],[-120,120]].forEach(([x,z],i)=>{
+    const b=new THREE.Group(); b.position.set(x,0,z); b.rotation.y=rnd(0,6.28); seaG.add(b);
+    const hull=new THREE.Mesh(new THREE.BoxGeometry(5,.9,1.8),hullM); hull.position.y=.3; b.add(hull);
+    const mast=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,6,6),hullM); mast.position.y=3.3; b.add(mast);
+    const sail=new THREE.Mesh(sailGeo,sailMs[i%3]); sail.position.set(.1,.3,0); b.add(sail);
+    b.scale.setScalar(1.6); b.userData.ph=i*1.9; boats.push(b);
+  });
+  // メインスタンドの屋根の上の旗（風下へなびく）
+  const pm=new THREE.MeshStandardMaterial({color:col(0xe9e9e6),roughness:.35,metalness:.6});
+  const fms=[BRIKI.shirt,0xffd23f,0xf6f4ee].map(c=>new THREE.MeshStandardMaterial({color:col(c),roughness:.6,side:THREE.DoubleSide}));
+  for(let i=0;i<7;i++){
+    const x=-27+i*9, z=-(HW+4.4)-simpleMain.D-.3, y=simpleMain.H;
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,3,8),pm); pole.position.set(x,y+1.5,z); seaG.add(pole);
+    const piv=new THREE.Group(); piv.position.set(x,y+2.7,z); seaG.add(piv);
+    const f=new THREE.Mesh(new THREE.PlaneGeometry(1.4,.8),fms[i%3]); f.position.x=.7; piv.add(f);
+    roofFlags.push(piv);
+  }
+})();
+
+// ---------- 雪：降る雪（カメラの注視点の周りだけに降らせ、はみ出したら反対側へ回す） ----------
+const SNOW_N=1600, SNOW_W=90, SNOW_D=70, SNOW_H=30;
+const snowGeo=new THREE.BufferGeometry(), snowPos=new Float32Array(SNOW_N*3), snowSpd=new Float32Array(SNOW_N);
+for(let i=0;i<SNOW_N;i++){ snowPos[i*3]=rnd(-SNOW_W/2,SNOW_W/2); snowPos[i*3+1]=rnd(0,SNOW_H); snowPos[i*3+2]=rnd(-SNOW_D/2,SNOW_D/2); snowSpd[i]=rnd(1.2,2.4); }
+snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
+const snowSprite=(()=>{const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d');const gr=g.createRadialGradient(16,16,0,16,16,16);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.5,'rgba(255,255,255,.8)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,32,32);return new THREE.CanvasTexture(c);})();
+const snowPts=new THREE.Points(snowGeo,new THREE.PointsMaterial({size:.3,map:snowSprite,transparent:true,depthWrite:false,color:0xffffff}));
+snowPts.frustumCulled=false; snowPts.visible=false; scene.add(snowPts);
+function updateSnow(dt,cx,cz){
+  const p=snowPos, wrap=(v,c,w)=>v-c>w/2?v-w:v-c<-w/2?v+w:v;
+  for(let i=0;i<SNOW_N;i++){
+    const k=i*3;
+    p[k]+=Math.sin(T*.7+i)*.35*dt; p[k+1]-=snowSpd[i]*dt; p[k+2]+=Math.cos(T*.5+i*1.3)*.3*dt;
+    if(p[k+1]<0) p[k+1]+=SNOW_H;
+    p[k]=wrap(p[k],cx,SNOW_W); p[k+2]=wrap(p[k+2],cz,SNOW_D);
+  }
+  snowGeo.attributes.position.needsUpdate=true;
+}
+
+// ---------- メガスタジアムの演出：LEDリボンビジョン・コレオ・花火・カメラのフラッシュ ----------
+// LEDリボン：上層と下層の間に巻いた細長いビジョン。ふだんは流れる表示、ゴール・ラッシュで切り替わる
+const ribbonCanvas=document.createElement('canvas'); ribbonCanvas.width=2048; ribbonCanvas.height=64;
+const ribbonTex=new THREE.CanvasTexture(ribbonCanvas); ribbonTex.encoding=THREE.sRGBEncoding; ribbonTex.wrapS=THREE.RepeatWrapping; ribbonTex.repeat.x=3;
+let ribbonMode='';
+function drawRibbon(mode){
+  ribbonMode=mode;
+  const g=ribbonCanvas.getContext('2d'), T1=TEAMS[1];
+  const seg=(i,n,bg,fg,t)=>{ const w=2048/n; g.fillStyle=bg; g.fillRect(i*w,0,w,64); g.fillStyle=fg; g.font="36px 'Dela Gothic One', sans-serif"; g.textAlign='center'; g.textBaseline='middle'; g.fillText(t,i*w+w/2,35,w-24); };
+  if(mode==='normal'){
+    const segs=[['#14235a','#ffd23f','TOY MEGA STADIUM'],[BRIKI.css,'#fff','ブリキFC'],['#0b0f1a','#9fd0ff','8人制リーグ'],[T1.css,T1.ink,T1.name]];
+    segs.forEach((s,i)=>seg(i,4,...s));
+  } else {
+    // g0/g1: ゴール、r0/r1: ラッシュ（チームカラーと金の交互）
+    const t=+mode[1], T=TEAMS[t], c=t===0?BRIKI.css:T.css, ink=t===0?'#fff':T.ink, word=mode[0]==='g'?'GOAL!!':'RUSH!!';
+    for(let i=0;i<6;i++) seg(i,6,i%2?'#ffd23f':c,i%2?'#14235a':ink,i%2?word:T.name);
+  }
+  g.fillStyle='rgba(0,0,0,.25)'; for(let x=0;x<2048;x+=4) g.fillRect(x,0,1,64); for(let y=0;y<64;y+=4) g.fillRect(0,y,2048,1);
+  ribbonTex.needsUpdate=true;
+}
+drawRibbon('normal'); if(document.fonts) document.fonts.load("36px 'Dela Gothic One'").then(()=>drawRibbon(ribbonMode)).catch(()=>{});
+const ribbonMat=new THREE.MeshStandardMaterial({map:ribbonTex,emissive:0xffffff,emissiveMap:ribbonTex,emissiveIntensity:1,roughness:.35});
+// st: スタンド、y: 中心の高さ、h: 高さ
+function ribbon(st,len,y,h){ const m=new THREE.Mesh(new THREE.PlaneGeometry(len,h),ribbonMat); m.position.set(0,y,.2); st.g.add(m); }
+ribbon(megaStands.main,HL*2+14,9.15,.7);
+ribbon(megaStands.back,HL*2+10,5.15,.8);
+
+// コレオ：ホーム側ゴール裏の上層いっぱいに広げるブリキFCの巨大タペストリー（座席の傾きに沿わせる）
+(function(){
+  const c=document.createElement('canvas'); c.width=1024; c.height=256; const g=c.getContext('2d');
+  // 折り紙風の三角形の位置は描き直しても変わらないよう先に決めておく
+  const tri=Array.from({length:40},(_,i)=>[(i%10)*110-20+(i>>3)*13,Math.floor(i/10)*70-10,i%3]);
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+  const paint=()=>{
+    g.fillStyle='#1b3586'; g.fillRect(0,0,1024,256);
+    for(const [x,y,k] of tri){ g.fillStyle=k?'rgba(74,120,220,.55)':'rgba(255,255,255,.12)'; g.beginPath(); g.moveTo(x,y); g.lineTo(x+120,y+40); g.lineTo(x+30,y+110); g.closePath(); g.fill(); }
+    g.fillStyle='#d7263d'; g.fillRect(0,0,1024,14); g.fillRect(0,242,1024,14);
+    g.fillStyle='#ffd23f'; g.beginPath(); g.arc(150,128,78,0,Math.PI*2); g.fill();
+    g.textAlign='center'; g.textBaseline='middle';
+    g.fillStyle='#1b3586'; g.font="64px 'Dela Gothic One', sans-serif"; g.fillText('8',150,134);
+    g.fillStyle='#ffd23f'; g.font="120px 'Dela Gothic One', sans-serif"; g.fillText('ブリキFC',610,138,700);
+    t.needsUpdate=true;
+  };
+  paint(); if(document.fonts) document.fonts.load("120px 'Dela Gothic One'").then(paint).catch(()=>{});
+  const st=megaStands.home, rise=7*.75, run=7*1.1, L=Math.hypot(rise,run);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(HW*2+4,L),new THREE.MeshStandardMaterial({map:t,roughness:.8,side:THREE.DoubleSide}));
+  m.rotation.x=-Math.atan2(run,rise); m.position.set(0,12.8+rise/2+1,-run/2); m.castShadow=true; st.g.add(m);
+})();
+
+// 花火と火柱：粒ごとに色・不透明度・大きさを持つ Points（昼間でも白飛びしないよう通常の合成で描く）
+const FW_N=2000, fwPos=new Float32Array(FW_N*3), fwCol=new Float32Array(FW_N*3), fwBase=new Float32Array(FW_N*3), fwVel=new Float32Array(FW_N*3);
+const fwAlpha=new Float32Array(FW_N), fwSize=new Float32Array(FW_N), fwLife=new Float32Array(FW_N), fwMax=new Float32Array(FW_N), fwFlame=new Uint8Array(FW_N);
+const fwGeo=new THREE.BufferGeometry();
+fwGeo.setAttribute('position',new THREE.BufferAttribute(fwPos,3)); fwGeo.setAttribute('color',new THREE.BufferAttribute(fwCol,3));
+fwGeo.setAttribute('alpha',new THREE.BufferAttribute(fwAlpha,1)); fwGeo.setAttribute('psize',new THREE.BufferAttribute(fwSize,1));
+const fwPts=new THREE.Points(fwGeo,new THREE.ShaderMaterial({
+  uniforms:{scale:{value:1}},
+  vertexShader:'attribute vec3 color; attribute float alpha; attribute float psize; uniform float scale; varying vec3 vC; varying float vA;'
+    +'void main(){ vC=color; vA=alpha; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=psize*scale/-mv.z; gl_Position=projectionMatrix*mv; }',
+  fragmentShader:'varying vec3 vC; varying float vA; void main(){ float d=length(gl_PointCoord-0.5); if(d>0.5) discard; gl_FragColor=vec4(vC,vA*smoothstep(0.5,0.15,d)); }',
+  transparent:true,depthWrite:false}));
+fwPts.frustumCulled=false; fwPts.visible=false; scene.add(fwPts);
+const FL_YELLOW=[1,.85,.35], FL_ORANGE=[1,.45,.1], FL_SMOKE=[.42,.4,.38];
+const FW_COLS=[[1,.82,.25],[1,.3,.25],[.35,.6,1],[1,1,1],[.35,1,.45],[1,.4,.9]];
+let fwHead=0, fwAlive=0; const fwShells=[], fwJets=[];
+// n 発をメインスタンドの前上空へ、少しずつ時間をずらして打ち上げる（引きのカメラ・リプレイ・メニューで見える）
+function launchFireworks(n){
+  if(!STAD.lux) return;
+  for(let i=0;i<n;i++) fwShells.push({t:i===0?0:rnd(.1,1.8),x:rnd(-28,28),y:rnd(13,19),z:rnd(-30,-22),c:pick(FW_COLS)});
+}
+// 火柱（パイロ）：看板の裏から炎を噴き上げる。低い位置なので試合中のカメラにも映る
+function launchPyro(dur=1.4){
+  if(!STAD.lux) return;
+  for(let i=0;i<8;i++) fwJets.push({x:-26+i*52/7,z:-(HW+2.7),delay:(i%2)*.25,t:dur});
+  sfx.firework();
+}
+// 粒を1つ出す（c: 色、life: 寿命、size: 大きさ、flame: 炎→煙に色が変わる）
+function fwEmit(x,y,z,vx,vy,vz,c,life,size,flame=0){
+  const k=fwHead; fwHead=(fwHead+1)%FW_N;
+  fwPos[k*3]=x; fwPos[k*3+1]=y; fwPos[k*3+2]=z; fwVel[k*3]=vx; fwVel[k*3+1]=vy; fwVel[k*3+2]=vz;
+  fwBase[k*3]=c[0]; fwBase[k*3+1]=c[1]; fwBase[k*3+2]=c[2]; fwLife[k]=fwMax[k]=life; fwSize[k]=size; fwFlame[k]=flame;
+}
+function explode(s){
+  const c=s.c;
+  for(let i=0;i<140;i++){
+    const u=Math.random()*2-1, a=Math.random()*Math.PI*2, r=Math.sqrt(1-u*u), sp=rnd(5,7.5);
+    fwEmit(s.x,s.y,s.z,r*Math.cos(a)*sp,u*sp,r*Math.sin(a)*sp,Math.random()<.2?[1,1,.9]:c,rnd(1.2,1.8),.35);
+  }
+  fwPts.visible=true; sfx.firework();
+}
+function updateFireworks(dt){
+  for(let i=fwShells.length-1;i>=0;i--){ const s=fwShells[i]; s.t-=dt; if(s.t<=0){ explode(s); fwShells.splice(i,1); } }
+  for(let i=fwJets.length-1;i>=0;i--){ const j=fwJets[i];
+    if(j.delay>0){ j.delay-=dt; continue; }
+    j.t-=dt; if(j.t<=0){ fwJets.splice(i,1); continue; }
+    for(let n=Math.max(1,Math.round(dt*90));n>0;n--) fwEmit(j.x+rnd(-.3,.3),1.1,j.z+rnd(-.3,.3),rnd(-.7,.7),rnd(8,11),rnd(-.7,.7),[1,.8,.3],rnd(.45,.7),rnd(.7,1.1),1);
+    fwPts.visible=true;
+  }
+  if(!fwPts.visible) return;
+  // 粒の大きさ（m）を画面のピクセルに直す係数
+  fwPts.material.uniforms.scale.value=renderer.domElement.height/2/Math.tan(camera.fov*Math.PI/360);
+  fwAlive=0; const drag=1-dt*1.3;
+  for(let k=0;k<FW_N;k++){
+    const j=k*3;
+    if(fwLife[k]<=0){ fwAlpha[k]=0; continue; }
+    fwLife[k]-=dt;
+    fwVel[j]*=drag; fwVel[j+1]=fwVel[j+1]*drag-3*dt; fwVel[j+2]*=drag;
+    fwPos[j]+=fwVel[j]*dt; fwPos[j+1]+=fwVel[j+1]*dt; fwPos[j+2]+=fwVel[j+2]*dt;
+    const f=Math.max(0,fwLife[k]/fwMax[k]);
+    if(fwFlame[k]){
+      // 炎：黄色→オレンジ→灰色の煙。煙になるほど大きく薄く
+      const [A,B,u]=f>.6?[FL_ORANGE,FL_YELLOW,(f-.6)/.4]:[FL_SMOKE,FL_ORANGE,f/.6];
+      for(let c=0;c<3;c++) fwCol[j+c]=A[c]+(B[c]-A[c])*u;
+      fwAlpha[k]=f*.95; fwSize[k]+=dt*1.2;
+    } else {
+      // 花火：終わり際はちらつかせながら消える
+      fwCol[j]=fwBase[j]; fwCol[j+1]=fwBase[j+1]; fwCol[j+2]=fwBase[j+2];
+      fwAlpha[k]=f<.3?(Math.random()<.5?f*3:0):1;
+    }
+    fwAlive++;
+  }
+  for(const n of ['position','color','alpha','psize']) fwGeo.attributes[n].needsUpdate=true;
+  if(!fwAlive&&!fwShells.length&&!fwJets.length) fwPts.visible=false;
+}
+
+// カメラのフラッシュ：観客席のあちこちで一瞬光る。盛り上がる場面ほど増える
+const FL_N=60, flPos=new Float32Array(FL_N*3), flCol=new Float32Array(FL_N*3), flLife=new Float32Array(FL_N);
+const flGeo=new THREE.BufferGeometry(); flGeo.setAttribute('position',new THREE.BufferAttribute(flPos,3)); flGeo.setAttribute('color',new THREE.BufferAttribute(flCol,3));
+const flPts=new THREE.Points(flGeo,new THREE.PointsMaterial({size:.7,map:snowSprite,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+flPts.frustumCulled=false; megaG.add(flPts);
+let flHead=0;
+function updateFlashes(dt,hype){
+  const rate=hype?30:3;
+  let n=Math.floor(rate*dt)+(Math.random()<(rate*dt)%1?1:0);
+  const pool=Math.random()<.6?megaCrowd:mainCrowd;
+  while(n-->0){ const s=pool.list[(Math.random()*pool.body.count)|0], k=flHead; flHead=(flHead+1)%FL_N;
+    flPos[k*3]=s.x; flPos[k*3+1]=s.y+1.1; flPos[k*3+2]=s.z; flLife[k]=.12; }
+  for(let k=0;k<FL_N;k++){ flLife[k]=Math.max(0,flLife[k]-dt); const v=flLife[k]/.12*3; flCol[k*3]=flCol[k*3+1]=flCol[k*3+2]=v; }
+  flGeo.attributes.position.needsUpdate=flGeo.attributes.color.needsUpdate=true;
+}
+// 最後に点を入れたチーム（ゴール演出中のリボン表示に使う）
+let lastGoalTeam=null;
+// 毎フレーム：リボンの表示切り替えと流し、花火、フラッシュ
+function updateLux(dt){
+  updateFireworks(dt);
+  if(!megaG.visible) return;
+  const goal=state==='goal'&&lastGoalTeam!==null, r=rushT[0]>0?0:rushT[1]>0?1:-1;
+  const mode=goal?'g'+lastGoalTeam:r>=0&&state==='play'?'r'+r:'normal';
+  if(mode!==ribbonMode) drawRibbon(mode);
+  ribbonTex.offset.x-=dt*(mode==='normal'?.04:.25);
+  ribbonMat.emissiveIntensity=mode==='normal'?1:1+Math.abs(Math.sin(T*8))*.8;
+  updateFlashes(dt,mode!=='normal');
+}
+
 // ---------- ball ----------
-function ballTexture(){
+// base: 地の色（雪のスタジアムではオレンジ）
+function ballTexture(base='#f7f5ee'){
   const W=512,H=256,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
-  g.fillStyle='#f7f5ee';g.fillRect(0,0,W,H);
+  g.fillStyle=base;g.fillRect(0,0,W,H);
   const ph=(1+Math.sqrt(5))/2; const v=[];
   [[-1,ph,0],[1,ph,0],[-1,-ph,0],[1,-ph,0],[0,-1,ph],[0,1,ph],[0,-1,-ph],[0,1,-ph],[ph,0,-1],[ph,0,1],[-ph,0,-1],[-ph,0,1]].forEach(a=>{const l=Math.hypot(...a);v.push(a.map(q=>q/l));});
   g.fillStyle='#1d2f6b';
@@ -922,7 +1370,8 @@ function ballTexture(){
   g.fillStyle='#e6483b';g.fillRect(0,H/2-3,W,6);
   const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
 }
-const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,32,20),new THREE.MeshPhysicalMaterial({map:ballTexture(),roughness:.3,clearcoat:1,clearcoatRoughness:.08}));
+const ballTexs={white:ballTexture()};
+const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(BR,32,20),new THREE.MeshPhysicalMaterial({map:ballTexs.white,roughness:.3,clearcoat:1,clearcoatRoughness:.08}));
 ballMesh.castShadow=true; scene.add(ballMesh);
 const ball={pos:new THREE.Vector3(0,BR,0),vel:new THREE.Vector3(),owner:null,lastTouch:0,shot:0,passTo:null};
 const trail=[]; const trailHist=[];
@@ -1197,7 +1646,7 @@ function initAudio(){
     for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
     const src=AC.createBufferSource(); src.buffer=buf; src.loop=true;
     const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=700; bp.Q.value=.6;
-    crowdGain=AC.createGain(); crowdGain.gain.value=.05;
+    crowdGain=AC.createGain(); crowdGain.gain.value=.05*STAD.crowd; // 歓声の大きさはスタジアムで変わる
     src.connect(bp); bp.connect(crowdGain); crowdGain.connect(master); src.start();
   }catch(e){AC=null;}
 }
@@ -1229,11 +1678,12 @@ const sfx={
   blip:i=>{ const f=520*Math.pow(1.122,Math.min(i,12)); tone(f,f,.12,.16,'triangle'); tone(f*2,f*2,.08,.06,'sine'); },
   tick:()=>tone(1900,1900,.025,.035,'square'),
   skill:()=>{ noiseBurst(.18,1200,.12,'bandpass'); tone(500,1300,.16,.09,'triangle'); },
+  firework:()=>{ noiseBurst(.6,250,.3,'lowpass'); noiseBurst(.9,3000,.06); tone(90,40,.3,.2); },
   rush:()=>{ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,f,.16,.1,'square'),i*90)); },
   stamp:lv=>{ tone(120,38,.55,.55); noiseBurst(.25,400,.35,'lowpass'); sfx.cheer();
     [1046,1318,1568,2093,2637].slice(0,2+lv).forEach((f,i)=>setTimeout(()=>{tone(f,f,.14,.12,'square');tone(f*1.5,f*1.5,.1,.05,'triangle');},120+i*85)); },
-  cheer:()=>{if(!crowdGain)return; const t=AC.currentTime; crowdGain.gain.cancelScheduledValues(t); crowdGain.gain.setValueAtTime(crowdGain.gain.value,t); crowdGain.gain.linearRampToValueAtTime(.42,t+.25); crowdGain.gain.linearRampToValueAtTime(.05,t+4);},
-  ooh:()=>{if(!crowdGain)return; const t=AC.currentTime; crowdGain.gain.cancelScheduledValues(t); crowdGain.gain.setValueAtTime(crowdGain.gain.value,t); crowdGain.gain.linearRampToValueAtTime(.2,t+.2); crowdGain.gain.linearRampToValueAtTime(.05,t+1.6);}
+  cheer:()=>{if(!crowdGain)return; const t=AC.currentTime; crowdGain.gain.cancelScheduledValues(t); crowdGain.gain.setValueAtTime(crowdGain.gain.value,t); crowdGain.gain.linearRampToValueAtTime(.42*STAD.crowd,t+.25); crowdGain.gain.linearRampToValueAtTime(.05*STAD.crowd,t+4);},
+  ooh:()=>{if(!crowdGain)return; const t=AC.currentTime; crowdGain.gain.cancelScheduledValues(t); crowdGain.gain.setValueAtTime(crowdGain.gain.value,t); crowdGain.gain.linearRampToValueAtTime(.2*STAD.crowd,t+.2); crowdGain.gain.linearRampToValueAtTime(.05*STAD.crowd,t+1.6);}
 };
 
 // ---------- game state ----------
@@ -1244,23 +1694,47 @@ const teamDir=t=>t===0?1:-1;
 const dXZ=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 
 // 勢い（モメンタム）ゲージ：満タンでラッシュタイム（チーム全体が一定時間スピードアップ）
-const mom=[0,0], rushT=[0,0], RUSH_LEN=9, MOM_DECAY=.011;
+// たまり方・減り方・ラッシュの長さはスタジアムで変わる
+const mom=[0,0], rushT=[0,0], MOM_DECAY=.011;
 const rushMul=t=>rushT[t]>0?1.09:1;
 function addMom(t,v){
   if((state!=='play'&&state!=='goal')||rushT[t]>0) return;
-  mom[t]=Math.min(1,mom[t]+v);
+  mom[t]=Math.min(1,mom[t]+v*STAD.mom);
   if(mom[t]>=1&&state==='play') startRush(t);
 }
 function startRush(t){
-  rushT[t]=RUSH_LEN;
+  rushT[t]=STAD.rush;
   banner('ラッシュタイム',TEAMS[t].name+(t===0?'　押せ押せ！':'　の猛攻に注意！'),1500);
-  sfx.rush(); sfx.cheer(); crowdJump=Math.max(crowdJump,1.6);
+  sfx.rush(); sfx.cheer(); crowdJump=Math.max(crowdJump,1.6); launchFireworks(3); launchPyro(.8);
 }
 function updateMomentum(dt){
   for(let t=0;t<2;t++){
-    if(rushT[t]>0){ rushT[t]=Math.max(0,rushT[t]-dt); mom[t]=rushT[t]/RUSH_LEN; }
-    else { mom[t]=Math.max(0,mom[t]-MOM_DECAY*dt); if(mom[t]>=1) startRush(t); }
+    if(rushT[t]>0){ rushT[t]=Math.max(0,rushT[t]-dt); mom[t]=rushT[t]/STAD.rush; }
+    else { mom[t]=Math.max(0,mom[t]-MOM_DECAY*STAD.decay*dt); if(mom[t]>=1) startRush(t); }
   }
+}
+// 風（うみかぜスタジアム）：前後半ごとに主な風向きを決め、そこから数秒おきに向きと強さが揺らぐ（m/s）
+const wind={x:0,z:0,tx:0,tz:0,base:0,t:0};
+function nextGust(){ const a=wind.base+rnd(-.7,.7), s=rnd(1.5,6.5); wind.tx=Math.cos(a)*s; wind.tz=Math.sin(a)*s; wind.t=rnd(6,12); }
+function resetWind(){ wind.base=Math.random()*Math.PI*2; nextGust(); wind.x=wind.tx; wind.z=wind.tz; }
+function updateWind(dt){
+  if(!STAD.wind) return;
+  wind.t-=dt; if(wind.t<=0) nextGust();
+  const k=1-Math.exp(-dt*.5); wind.x+=(wind.tx-wind.x)*k; wind.z+=(wind.tz-wind.z)*k;
+}
+const windUI=$('#windUI'), windArrow=$('#windArrow'), windSpd=$('#windSpd'); let windDeg=0, windTxt='';
+// 風向計：画面上での向き（カメラの前方が上）に矢印を回す
+function drawWind(){
+  const show=!!STAD.wind&&state!=='menu';
+  if(windUI.hidden===show) windUI.hidden=!show;
+  if(!show) return;
+  const sx=wind.x*-camF.z+wind.z*camF.x, sy=wind.x*camF.x+wind.z*camF.z;
+  const deg=Math.round(Math.atan2(sx,sy)*180/Math.PI/5)*5;
+  // 350°→10° のような変化で逆回りしないよう、前回からの差を -180〜180° にして足していく
+  const d=((deg-windDeg)%360+540)%360-180;
+  if(d){ windDeg+=d; windArrow.style.transform=`rotate(${windDeg}deg)`; }
+  const txt=Math.hypot(wind.x,wind.z).toFixed(1);
+  if(txt!==windTxt){ windTxt=txt; windSpd.textContent=txt; }
 }
 const momUI=[0,1].map(t=>({bar:$('#mb'+t),fill:$('#m'+t),lab:$('#rl'+t),w:-1,rush:null,full:null,sec:-1}));
 const rushEdge=$('#rushEdge'); let edgeMode='';
@@ -1308,7 +1782,7 @@ function setupKickoff(team){
 }
 function resetMatch(){
   score=[0,0]; half=1; clock=0; stylePts=0; bestRank=''; goalStreak=0; chain.team=null; chain.passes=0;
-  mom[0]=mom[1]=rushT[0]=rushT[1]=0; pendingFoul=null; drawMomentum(); resetStats();
+  mom[0]=mom[1]=rushT[0]=rushT[1]=0; pendingFoul=null; drawMomentum(); resetStats(); resetWind();
   updateScore(); setupKickoff(0);
 }
 function updateScore(){ $('#s0').textContent=score[0]; $('#s1').textContent=score[1]; drawScoreboard(); }
@@ -1429,7 +1903,7 @@ function passChoice(p,q){
   const g=passRisk(p,q,false);
   if((g.lx-p.pos.x)*teamDir(p.team)<3||g.dist<9) return g; // 後ろ・横・近距離は地上のまま
   const a=passRisk(p,q,true); a.risk+=LOFT_PENALTY;
-  return g.dist>LOFT_PASS_DIST||a.risk<g.risk?a:g;
+  return g.dist>(STAD.loftDist||LOFT_PASS_DIST)||a.risk<g.risk?a:g;
 }
 const autoLoft=(p,q)=>passChoice(p,q).loft;
 function bestPassTarget(p,pref,loft=false){
@@ -1621,8 +2095,8 @@ function ballFuture(t){
   const tl=landTime();
   if(tl>0){ if(t<=tl) return {x:px+vx*t,z:pz+vz*t}; px+=vx*tl; pz+=vz*tl; vx*=.9; vz*=.9; t-=tl; }
   const hs=Math.hypot(vx,vz); if(hs<.01) return {x:px,z:pz};
-  const c=.9/.7, tStop=Math.log((hs+c)/c)/.7; t=Math.min(t,tStop);
-  const dist=(hs+c)*(1-Math.exp(-.7*t))/.7-c*t;
+  const K=STAD.rollK, c=STAD.rollC/K, tStop=Math.log((hs+c)/c)/K; t=Math.min(t,tStop);
+  const dist=(hs+c)*(1-Math.exp(-K*t))/K-c*t;
   return {x:px+vx/hs*dist,z:pz+vz/hs*dist};
 }
 function intercept(p,spd=7.5){ const tmin=landTime()*.9; let t=tmin,f=ballFuture(t); for(let i=0;i<5;i++){ f=ballFuture(t); t=Math.max(tmin,Math.min(3,Math.hypot(f.x-p.pos.x,f.z-p.pos.z)/spd)); } return ballFuture(t); }
@@ -1791,7 +2265,7 @@ function skillPop(text,p){
   skillPopEl.classList.remove('go'); void skillPopEl.offsetWidth; skillPopEl.classList.add('go');
 }
 addEventListener('keydown',e=>{
-  if(!$('#helpOv').hidden||!$('#formView').hidden||!$('#teamView').hidden){ if(e.code==='Escape') closeTopSheet(); return; }
+  if(!$('#helpOv').hidden||!$('#formView').hidden||!$('#teamView').hidden||!$('#stadView').hidden){ if(e.code==='Escape') closeTopSheet(); return; }
   if(e.code==='KeyP'||e.code==='Escape'){ togglePause(); return; }
   if((state==='replay'||state==='card')&&!paused){ if(!e.repeat) skipCinematic(); return; }
   if(e.code==='KeyM'&&!e.repeat){ radarOn=!radarOn; try{ localStorage.setItem('toy8-radar',radarOn?'1':'0'); }catch(_){} return; }
@@ -2122,14 +2596,14 @@ function updatePlayers(dt){
     let steer=true; tmpV.set(0,0,0);
     if(state==='kickoff'||state==='half'||state==='end'){ steer=true; }
     else if(p.stunT>0){ p.stunT-=dt; }
-    else if(p.fooledT>0){ p.fooledT-=dt; steer=false; p.vel.multiplyScalar(1-dt*3.5); } // フェイントに釣られて流れる
-    else if(p.tackleT>0){ p.tackleT-=dt; steer=false; p.vel.multiplyScalar(1-dt*2.5); tackleCheck(p); }
+    else if(p.fooledT>0){ p.fooledT-=dt; steer=false; p.vel.multiplyScalar(1-dt*3.5*STAD.grip); } // フェイントに釣られて流れる
+    else if(p.tackleT>0){ p.tackleT-=dt; steer=false; p.vel.multiplyScalar(1-dt*2.5*STAD.grip); tackleCheck(p); } // 雪ではスライディングが長く伸びる
     else if(!live){ if(p.celebrate){ tmpV.set(0,0,0);} else { const f=formTarget(p); seek(p,f.x,f.z,RUN*.5,tmpV);} }
     else if(p.locked){ if(p===active){ const i=inputVec(); if(i.m>.2) p.face=lerpAngle(p.face,Math.atan2(i.x,i.z),.25);} else ownerAI(p,tmpV,dt); }
     else if(p===active) userControl(p,tmpV);
     else if(p.role==='GK'){ if(gkAI(p,tmpV,dt)==='nosteer') steer=false; }
     else fieldAI(p,tmpV,dt);
-    if(steer){ const bm=live?rushMul(p.team):1, a=1-Math.exp(-dt*(ball.owner===p?8:11)); p.vel.x+=(tmpV.x*bm-p.vel.x)*a; p.vel.z+=(tmpV.z*bm-p.vel.z)*a; }
+    if(steer){ const bm=live?rushMul(p.team)*(STAD.speed||1):1, a=1-Math.exp(-dt*(ball.owner===p?8:11)*STAD.grip); p.vel.x+=(tmpV.x*bm-p.vel.x)*a; p.vel.z+=(tmpV.z*bm-p.vel.z)*a; }
     if(state==='kickoff'||state==='half'||state==='end') p.vel.set(0,0,0);
     p.pos.addScaledVector(p.vel,dt);
     // PK中はユーザー操作の選手も含めてエリア外に留める
@@ -2198,6 +2672,8 @@ function gkCheck(){
     return;
   }
 }
+// 転がるボールの水平の向きを a ラジアン回す（イレギュラーバウンド）
+function turnBall(a){ const v=ball.vel, c=Math.cos(a), sn=Math.sin(a), vx=v.x; v.x=vx*c-v.z*sn; v.z=vx*sn+v.z*c; }
 function updateBall(dt){
   const o=ball.owner;
   if(o){
@@ -2220,11 +2696,15 @@ function updateBall(dt){
     v.y-=(ball.grav||9.81)*h;
     // 直接FKのカーブ：水平方向の速度を少しずつ回す
     if(ball.curve){ const w=ball.curve*h, vx=v.x; v.x-=v.z*w; v.z+=vx*w; }
+    // 風：浮いているボールほど大きく流される
+    if(STAD.wind){ const k=b.y>BR+.05?.4:.06; v.x+=wind.x*k*h; v.z+=wind.z*k*h; }
     b.addScaledVector(v,h);
-    if(b.y<BR){ b.y=BR; ball.curve=ball.grav=0; if(v.y<-1.5){ v.y*=-.52; v.x*=.9; v.z*=.9; if(v.y>2) sfx.bounce(); } else v.y=0; }
+    if(b.y<BR){ b.y=BR; ball.curve=ball.grav=0; if(v.y<-1.5){ v.y*=-STAD.bounce; v.x*=.9; v.z*=.9; if(STAD.bumpy) turnBall(rnd(-.25,.25)); if(v.y>2) sfx.bounce(); } else v.y=0; }
     const ground=b.y<=BR+.01&&Math.abs(v.y)<.01;
     const hs=Math.hypot(v.x,v.z);
-    if(hs>0){ let ns=ground?hs*Math.exp(-.7*h)-.9*h:hs*(1-.05*h); if(ns<0) ns=0; v.x*=ns/hs; v.z*=ns/hs; }
+    if(hs>0){ let ns=ground?hs*Math.exp(-STAD.rollK*h)-STAD.rollC*h:hs*(1-.05*h); if(ns<0) ns=0; v.x*=ns/hs; v.z*=ns/hs; }
+    // 土のデコボコ：転がっているボールがときどき跳ねて向きが変わる
+    if(STAD.bumpy&&ground&&hs>2.5&&Math.random()<h*.45){ turnBall(rnd(-.4,.4)); v.y=rnd(.8,2)*Math.min(1,hs/8); sfx.bounce(); }
     frameCollide();
   }
 }
@@ -2341,6 +2821,7 @@ function goalScored(team){
   nextKick=1-team;
   banner('GOAL!',TEAMS[team].name+(team===0?'　ナイスゴール！':'　失点…'),2600);
   sfx.cheer(); sfx.whistle(.3); shake(.6); burstConfetti(team); crowdJump=3.2;
+  lastGoalTeam=team; launchFireworks(7); launchPyro();
 }
 
 // ---------- camera ----------
@@ -2383,8 +2864,19 @@ function placeTag(el,p,y,lift){
 const q0=new THREE.Quaternion(), axis=new THREE.Vector3();
 function updateVisuals(dt){
   const cine=state==='replay'||state==='card';
-  flags.forEach((f,i)=>{ f.rotation.y=Math.sin(T*2.6+i*1.7)*.35+i*Math.PI/2; f.children[0].rotation.x=Math.sin(T*5+i)*.12; });
-  clouds.rotation.y+=dt*.004;
+  if(STAD.wind){
+    // 風下へなびかせる（強いほど速くはためく）
+    const wa=Math.atan2(-wind.z,wind.x), ws=Math.hypot(wind.x,wind.z);
+    const flap=(f,i)=>{ f.rotation.y=wa+Math.sin(T*(3+ws)+i*1.7)*.12; f.children[0].rotation.x=Math.sin(T*(6+ws*1.5)+i)*.25; };
+    flags.forEach(flap); roofFlags.forEach(flap);
+    boats.forEach(b=>{ b.position.y=Math.sin(T*1.1+b.userData.ph)*.25; b.rotation.z=Math.sin(T*.9+b.userData.ph)*.06; });
+    clouds.rotation.y+=dt*.004*(1+ws*.6);
+  } else {
+    flags.forEach((f,i)=>{ f.rotation.y=Math.sin(T*2.6+i*1.7)*.35+i*Math.PI/2; f.children[0].rotation.x=Math.sin(T*5+i)*.12; });
+    clouds.rotation.y+=dt*.004;
+  }
+  if(snowPts.visible) updateSnow(dt,camLook.x,camLook.z);
+  updateLux(dt);
   if(!cine){
   for(const p of players){
     const sp=Math.hypot(p.vel.x,p.vel.z);
@@ -2786,14 +3278,14 @@ function step(dt){
       else { const i=inputVec(); if(i.m>.3&&Math.abs(i.z)>.35) c=Math.sign(i.z); }
       pkChoice=c;
     }
-    updateMomentum(dt);
+    updateMomentum(dt); updateWind(dt);
     skillInput(dt);
     updatePlayers(dt); updateBall(dt);
     if(pendingFoul){ const f=pendingFoul; pendingFoul=null; callFoul(f.by,f.victim); }
     gkCheck(); tryPickup(); checkRules();
   }
   else if(state==='goal'){ stateT-=dt; updatePlayers(dt); updateBall(dt); if(stateT<=0) startReplay(); }
-  else if(state==='half'){ stateT-=dt; if(stateT<=0){ half=2; clock=HALF_LEN; updateClock(); setupKickoff(1); } }
+  else if(state==='half'){ stateT-=dt; if(stateT<=0){ half=2; clock=HALF_LEN; updateClock(); resetWind(); setupKickoff(1); } }
   else if(state==='end'){ stateT-=dt; if(stateT<=0&&$('#endOv').hidden) showEnd(); }
   else if(state==='menu'){ T+=0; for(const p of players){ p.vel.set(0,0,0);} }
   updateButtonLabels();
@@ -2812,7 +3304,7 @@ function frame(now){
   }
   updateCamera(raw); updateMouseWorld();
   if(composer) composer.render(raw); else renderer.render(scene,camera);
-  drawRadar(); drawMomentum();
+  drawRadar(); drawMomentum(); drawWind();
 }
 
 // ---------- UI wiring ----------
@@ -2826,7 +3318,7 @@ function showEnd(){
 function startGame(){
   initAudio(); $('#menu').hidden=true; $('#endOv').hidden=true; $('#pauseOv').hidden=true; paused=false;
   prepareCpuFormation();
-  resetMatch(); banner('キックオフ',TEAMS[1].name+' は '+FORMATIONS[teamForm[1]].name,1600);
+  resetMatch(); launchFireworks(4); launchPyro(1); banner('キックオフ',TEAMS[1].name+' は '+FORMATIONS[teamForm[1]].name,1600);
 }
 function toMenu(){ HLS=null; rec=live; if(RP||CARD){ RP=null; CARD=null; replayUI.classList.remove('on'); replayUI.hidden=true; $('#goalCard').hidden=true; trail.forEach(m=>m.visible=false); sizeComposer(); } state='menu'; paused=false; $('#pauseOv').hidden=true; $('#endOv').hidden=true; $('#menu').hidden=false; $('#formView').hidden=true; $('#menuMain').hidden=false; resetPositions(); ball.owner=null; ball.pos.set(0,BR,0); ball.vel.set(0,0,0); active=null; }
 function togglePause(){
@@ -2982,6 +3474,61 @@ function closeTeamView(commit){
   if(commit) setCpuTeam(tvSel);
   $('#teamView').hidden=true; $('#menuMain').hidden=false; $('#tPick').focus();
 }
+// ---------- スタジアム ----------
+// 見た目・音・レーダーの色を切り替える（試合中の効果は各所で STAD を参照）
+function applyStadium(k){
+  stadKey=k; STAD=STADIUMS[k];
+  const S=STAD, school=k==='school', snow=k==='snow', sea=k==='seaside';
+  const sand=S.pitch==='sand';
+  pitchMat.map=pitchTex(S.pitch); pitchMat.roughness=snow?.6:school||sand?.95:.86; pitchMat.normalScale.setScalar(school?.5:sand?.4:snow?.12:.28); pitchMat.envMapIntensity=snow?.9:.6; pitchMat.needsUpdate=true;
+  track.material.color.copy(col(S.track)); outer.material.color.copy(col(S.outer)); outer.material.roughness=sea?.35:1;
+  paintSky(S.sky); scene.background.copy(col(S.fog[0])); scene.fog.color.copy(col(S.fog[0])); scene.fog.near=S.fog[1]; scene.fog.far=S.fog[2];
+  // 雪の日は日差しを弱く青白く、地面からの照り返しを明るく
+  sun.intensity=snow?1.7:2.7; sun.color.copy(col(snow?0xdfe8ff:0xffe8c8));
+  hemi.intensity=snow?.8:.5; hemi.groundColor.copy(col(snow?0xd5dde6:0x3a5a2c));
+  const mega=k==='mega';
+  arena.visible=!school; fullG.visible=megaG.visible=mega; simpleG.visible=!mega; schoolG.visible=school;
+  landG.visible=!sea; seaG.visible=sea; snowPts.visible=snow;
+  paintLand(snow);
+  setCrowdDensity(mega?mainCrowd:simpleCrowd,S.density); placeCrowd(0,T);
+  ballMesh.material.map=snow?(ballTexs.orange||(ballTexs.orange=ballTexture('#ff8a2a'))):ballTexs.white; ballMesh.material.needsUpdate=true;
+  drawFascia();
+  Object.assign(RC,school?{pitch:'rgba(170,128,84,.92)',stripe:'rgba(255,255,255,0)',line:'rgba(250,250,245,.7)',ball:'#ffffff'}
+    :snow?{pitch:'rgba(222,230,240,.92)',stripe:'rgba(120,140,170,.06)',line:'rgba(217,71,59,.75)',ball:'#ff8a2a'}
+    :sand?{pitch:'rgba(214,190,140,.92)',stripe:'rgba(255,255,255,0)',line:'rgba(47,111,214,.8)',ball:'#ffffff'}
+    :{pitch:'rgba(44,120,58,.92)',stripe:'rgba(255,255,255,.05)',line:'rgba(243,239,226,.6)',ball:'#ffffff'});
+  if(crowdGain) crowdGain.gain.value=.05*S.crowd;
+  resetWind();
+  $('#spName').textContent=S.name; $('#spSw').style.setProperty('--c',S.css);
+}
+// スタジアム選択画面：一覧で選ぶとすぐ背景に反映（戻るなら元に戻す）
+let svSel='toy', svPrev='toy';
+function renderStadView(){
+  $('#svList').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===svSel)));
+  const S=STADIUMS[svSel];
+  $('#svText').textContent=S.text;
+  $('#svRate').innerHTML=['勢いのたまりやすさ','ボールの転がり'].map((n,i)=>`<span>${n}</span><span class="pips" aria-label="${n} ${S.rate[i]}/5">${[0,1,2,3,4].map(j=>`<i class="${j<S.rate[i]?'on':''}"></i>`).join('')}</span>`).join('');
+  $('#svSp').textContent=S.sp;
+}
+function openStadView(){
+  svSel=svPrev=stadKey;
+  $('#svList').innerHTML=Object.entries(STADIUMS).map(([k,S])=>
+    `<button class="topt" data-s="${k}" aria-pressed="false" aria-label="${S.name}"><i class="sw" style="--c:${S.css}"></i>`
+    +`<span><b>${S.name}</b><small>${S.desc}</small></span><span class="lv">${S.tag}</span></button>`).join('');
+  $('#svList').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ svSel=b.dataset.s; applyStadium(svSel); renderStadView(); }));
+  renderStadView();
+  $('#menuMain').hidden=true; $('#stadView').hidden=false; $('#menu').scrollTop=0;
+  $('#svList').querySelector('[aria-pressed="true"]').focus();
+}
+// commit=true で決定、false は戻る（変更を破棄）
+function closeStadView(commit){
+  if(commit){ try{ localStorage.setItem('toy8-stad',svSel); }catch(e){} }
+  else if(stadKey!==svPrev) applyStadium(svPrev);
+  $('#stadView').hidden=true; $('#menuMain').hidden=false; $('#sPick').focus();
+}
+$('#sPick').addEventListener('click',openStadView);
+$('#stadOk').addEventListener('click',()=>closeStadView(true));
+$('#stadBack').addEventListener('click',()=>closeStadView(false));
 $('#tPick').addEventListener('click',openTeamView);
 $('#teamOk').addEventListener('click',()=>closeTeamView(true));
 $('#teamBack').addEventListener('click',()=>closeTeamView(false));
@@ -3003,11 +3550,13 @@ function closeTopSheet(){
   if(!$('#helpOv').hidden){ closeHelp(); return true; }
   if(!$('#formView').hidden){ closeFormView(false); return true; }
   if(!$('#teamView').hidden){ closeTeamView(false); return true; }
+  if(!$('#stadView').hidden){ closeStadView(false); return true; }
   return false;
 }
 selectFormation(myForm);
 selectCpuFormation(cpuChoice);
 syncCpuUI();
+applyStadium(stadKey);
 camera.aspect=innerWidth/innerHeight;
 
 resetPositions();
