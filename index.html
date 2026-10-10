@@ -464,9 +464,9 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
         <dl class="keys">
           <dt><kbd>WASD</kbd><kbd>矢印</kbd></dt><dd>移動</dd>
           <dt><kbd>Shift</kbd></dt><dd>ダッシュ</dd>
-          <dt><kbd>J</kbd><kbd>Z</kbd></dt><dd>パス（長押しでフォーメーションの特技）／守備時は選手切替</dd>
+          <dt><kbd>J</kbd><kbd>Z</kbd></dt><dd>パス（長押しでフォーメーションの特技）／守備時は選手切替、長押しでボール保持者へチャージ</dd>
           <dt><kbd>K</kbd><kbd>X</kbd><kbd>Space</kbd></dt><dd>シュート（長押しでパワー）／守備時はタックル</dd>
-          <dt><kbd>L</kbd><kbd>C</kbd></dt><dd>守備時の選手切替</dd>
+          <dt><kbd>L</kbd><kbd>C</kbd></dt><dd>守備時の選手切替。長押しでボール保持者へチャージ</dd>
           <dt><kbd>M</kbd></dt><dd>レーダー（全体マップ）の表示切替</dd>
           <dt><kbd>P</kbd><kbd>Esc</kbd></dt><dd>一時停止</dd>
         </dl>
@@ -475,7 +475,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
         <h3>マウス</h3>
         <dl class="keys">
           <dt>カーソル</dt><dd>カーソルの方へ走る（遠いと自動でダッシュ）</dd>
-          <dt>左クリック</dt><dd>カーソル先の味方へパス（長押しで特技）／守備時は選手切替</dd>
+          <dt>左クリック</dt><dd>カーソル先の味方へパス（長押しで特技）／守備時は選手切替、長押しでボール保持者へチャージ</dd>
           <dt>右クリック</dt><dd>カーソルの方へシュート（長押しでパワー）／守備時はタックル</dd>
         </dl>
       </section>
@@ -2132,6 +2132,16 @@ function intercept(p,spd=7.5){ const tmin=landTime()*.9; let t=tmin,f=ballFuture
 const keys={}; const btn={pass:false,shoot:false,sprint:false};
 let passHold=0, passing=false, charging=false, charge=0, chargeKeeper=null;
 const shootingPlayer=()=>chargeKeeper||active;
+const defenseButtons=new Set(); let defenseHold=0;
+function defenseCharging(){
+  const o=ball.owner;
+  return defenseButtons.size>0&&defenseHold>.22&&o&&o.team===1&&o.role!=='GK'&&!o.locked;
+}
+function updateDefenseHold(dt){
+  const o=ball.owner;
+  if(!o||o.team!==1||o.role==='GK'||o.locked){ defenseButtons.clear(); defenseHold=0; return; }
+  if(defenseButtons.size>0) defenseHold+=dt;
+}
 const stick={x:0,y:0,id:null,dash:false};
 const camF=new THREE.Vector3(0,0,-1);
 // mouse: the active player runs toward the cursor on the pitch
@@ -2185,9 +2195,12 @@ function switchPlayer(){
 function press(b){
   btn[b]=true; if(!canAct()) return;
   const o=ball.owner;
+  if((b==='pass'||b==='switch')&&(!o||o.team===1)){
+    if(!defenseButtons.size) defenseHold=0;
+    defenseButtons.add(b); switchPlayer(); return;
+  }
   if(b==='pass'){
     if(o===active){ passing=true; passHold=0; }
-    else if(!o || o.team===1) switchPlayer();
   } else if(b==='shoot'){
     chargeKeeper=null;
     if(o&&o.team===0&&o.role==='GK'){ chargeKeeper=o; charging=true; charge=0; }
@@ -2198,6 +2211,7 @@ function press(b){
 }
 function release(b){
   btn[b]=false;
+  defenseButtons.delete(b); if(!defenseButtons.size) defenseHold=0;
   if(b==='pass'&&passing){ passing=false; targetRing.visible=false; throughMark.visible=false;
     if(canAct()&&ball.owner===active){
       // 長押しはフォーメーションごとの特殊パス。成立しなければ通常パス
@@ -2206,7 +2220,7 @@ function release(b){
   if(b==='shoot'&&charging){ charging=false; $('#meter').hidden=true; if(canAct()&&ball.owner===shootingPlayer()) userShoot(Math.max(.15,charge)); chargeKeeper=null; }
 }
 // プレーが止まったら押しっぱなしのパス・シュートを取り消す（離して押し直すまで発動しない）
-function cancelHolds(){ passing=charging=false; chargeKeeper=null; charge=passHold=0; meter.hidden=true; targetRing.visible=throughMark.visible=false; }
+function cancelHolds(){ passing=charging=false; chargeKeeper=null; charge=passHold=defenseHold=0; defenseButtons.clear(); meter.hidden=true; targetRing.visible=throughMark.visible=false; }
 function userDir(){ const i=inputVec(); return i.m>.2?{x:i.x,z:i.z}:{x:Math.sin(active.face),z:Math.cos(active.face)}; }
 function userPassTarget(loft){
   const i=inputVec();
@@ -2310,14 +2324,15 @@ addEventListener('keydown',e=>{
   if(/^(Key[WASD]|Arrow)/.test(e.code)){ mouse.on=false; cursorRing.visible=false; renderer.domElement.style.cursor=''; }
   if(e.code==='KeyJ'||e.code==='KeyZ') press('pass');
   if(e.code==='KeyK'||e.code==='KeyX'||e.code==='Space') press('shoot');
-  if(e.code==='KeyL'||e.code==='KeyC') { if(canAct()&&!(ball.owner&&ball.owner.team===0)) switchPlayer(); }
+  if(e.code==='KeyL'||e.code==='KeyC') press('switch');
 });
 addEventListener('keyup',e=>{
   keys[e.code]=false;
   if(e.code==='KeyJ'||e.code==='KeyZ') release('pass');
   if(e.code==='KeyK'||e.code==='KeyX'||e.code==='Space') release('shoot');
+  if(e.code==='KeyL'||e.code==='KeyC') release('switch');
 });
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; cancelHolds(); });
 
 // touch
 const touchEl=$('#touch'), stickEl=$('#stick'), knob=$('#knob');
@@ -2612,6 +2627,13 @@ function gkAI(p,out,dt){
   seek(p,tx,tz,spd,out);
 }
 function userControl(p,out){
+  // 切替ボタンの長押し中はカーソル・移動入力よりボール保持者へのチャージを優先。
+  if(defenseCharging()){
+    const o=ball.owner;
+    if(dXZ(p.pos,ball.pos)<2.2&&p.tackleCD<=0){ startTackle(p,true); out.copy(p.vel); }
+    else seek(p,o.pos.x+o.vel.x*.2,o.pos.z+o.vel.z*.2,SPRINT,out);
+    return;
+  }
   // intended receiver runs onto the pass automatically
   if(!ball.owner&&ball.passTo===p&&p.receiveT>0){ const f=intercept(p,SPRINT); seek(p,f.x,f.z,SPRINT,out); return; }
   const i=inputVec(); const has=ball.owner===p;
@@ -3295,6 +3317,7 @@ function step(dt){
   T+=dt;
   if(state==='kickoff'){ stateT-=dt; if(stateT<=0){ state='play'; sfx.whistle(.35); } updatePlayers(dt); updateBall(dt); }
   else if(state==='play'){
+    updateDefenseHold(dt);
     clock+=dt*CLOCK_RATE; updateClock();
     if(clock>=half*HALF_LEN){
       sfx.whistle(.45,half===1?2:3);
@@ -3310,7 +3333,7 @@ function step(dt){
     if(switchTimer<=0||flipped){ switchTimer=.12;
       const mine=ball.owner&&ball.owner.team===0;
       const passing0=!ball.owner&&ball.passTo&&ball.passTo.team===0;
-      if(!mine&&!passing0&&active&&!active.locked&&active.tackleT<=0&&(T>manualSwitchUntil||flipped)){
+      if(!mine&&!passing0&&!defenseCharging()&&active&&!active.locked&&active.tackleT<=0&&(T>manualSwitchUntil||flipped)){
         const [best,bc]=bestDefender(null);
         if(best&&best!==active&&defCost(active)-bc>(flipped?.12:.3)) setActive(best);
       }
@@ -3376,7 +3399,7 @@ function toMenu(){ HLS=null; rec=live; if(RP||CARD){ RP=null; CARD=null; replayU
 function togglePause(){
   if(state==='menu'||state==='end') return;
   paused=!paused; $('#pauseOv').hidden=!paused; if(paused&&AC) AC.suspend&&AC.suspend(); else if(AC) AC.resume&&AC.resume();
-  charging=passing=false; chargeKeeper=null; meter.hidden=true;
+  cancelHolds();
 }
 $('#startBtn').addEventListener('click',startGame);
 $('#againBtn').addEventListener('click',startGame);
