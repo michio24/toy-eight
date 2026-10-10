@@ -1922,10 +1922,11 @@ function gkKickPlan(p,c,dir=null,aim=null){
         if(dir&&(dx*dir.x+dz*dir.z)/dist<.76) continue;
         const recv=Math.hypot(lx-q.pos.x,lz-q.pos.z)/SPRINT+.1;
         if(recv>t+.8) continue;
-        // 落下地点へ先に着いた方が競り勝つ：相手の到着時間との差が余裕
+        // 味方だけでなくボールが届くまで、相手が落下地点へ先回りできないかを見る。
+        const arrive=Math.max(recv,t);
         let margin=9;
         for(const o of players){ if(o.team===p.team) continue; const os=SPRINT*(o.team===1?diff.spd:1);
-          margin=Math.min(margin,Math.max(0,Math.hypot(o.pos.x-lx,o.pos.z-lz)-.8)/os+.25-recv); }
+          margin=Math.min(margin,Math.max(0,Math.hypot(o.pos.x-lx,o.pos.z-lz)-.8)/os+.25-arrive); }
         if(margin<.15) continue;
         const s=Math.min(margin,1.5)*2-(aim?Math.hypot(lx-aim.x,lz-aim.z)*.3:Math.abs(dist-range)*.12)+dx*d*.03;
         if(!best||s>best.s) best={q,x:lx,z:lz,s};
@@ -2607,7 +2608,7 @@ function shoulderCharge(p,o,dt){
   const bx=Math.sin(o.face), bz=Math.cos(o.face), rx=p.pos.x-o.pos.x, rz=p.pos.z-o.pos.z, rl=Math.hypot(rx,rz)||1;
   const behind=(rx*bx+rz*bz)/rl<-.3;
   if(Math.random()>dt*(behind?1.6:2.6)) return;
-  if(behind&&Math.random()<.15){ pendingFoul={by:p,victim:o}; p.stunT=.6; sfx.tackle(); shake(.12); return; }
+  if(behind&&Math.random()<.07){ pendingFoul={by:p,victim:o}; p.stunT=.6; sfx.tackle(); shake(.12); return; }
   ball.owner=p; ball.lastTouch=p.team; ball.passTo=null; ball.kicker=null; ball.passBy=null;
   p.gotT=T; p.drib=0; p.skillN=0; o.stunT=.45; o.pickupCD=.6;
   sfx.tackle(); shake(.1); addMom(p.team,.08); ST.tackles[p.team]++; p.st.tk++;
@@ -2624,7 +2625,7 @@ function cpuCut(p){
   if(foolNear(p,3.2,vx,vz,.6)){ skillPop('切り返し！',p); sfx.skill(); addMom(p.team,.06); }
 }
 // タックルがファウルになる確率：背後から／ボールに触れず／スキル中の相手へ（重なると加算）
-const FOUL_BEHIND=.25, FOUL_MISS=.08, FOUL_EVADE=.15;
+const FOUL_BEHIND=.12, FOUL_MISS=.04, FOUL_EVADE=.07;
 function tackleCheck(p){
   const o=ball.owner; if(!o||o.team===p.team||o.role==='GK'||o.locked) return;
   const fx=Math.sin(p.face), fz=Math.cos(p.face);
@@ -2800,7 +2801,7 @@ function gkAI(p,out,dt){
   if(o&&o.team!==t&&bdx<12&&Math.abs(ball.pos.z)<11){
     const r=dXZ(p.pos,o.pos);
     if(r<7){ tx=o.pos.x+(gx-o.pos.x)*.4; tz=o.pos.z*.6; spd=SPRINT*sm; }
-    if(r<1.4&&!o.locked&&o.evadeT<=0&&p.fooledT<=0&&Math.random()<1.4*dt*(t===1?diff.gk:1)){ ball.owner=p; p.holdT=rnd(.8,1.3); o.stunT=.5; ball.lastTouch=t; sfx.catch(); }
+    if(r<1.4&&!o.locked&&o.evadeT<=0&&p.fooledT<=0&&Math.random()<1.4*dt*(t===1?diff.gk:1)){ ball.owner=p; p.holdT=rnd(2,3); o.stunT=.5; ball.lastTouch=t; sfx.catch(); }
   }
   if(!o&&bdx<10&&Math.abs(ball.pos.z)<11){
     let od=99; for(const q of players) if(q.team!==t) od=Math.min(od,dXZ(q.pos,ball.pos));
@@ -2970,7 +2971,7 @@ function gkCheck(){
     if(sp>=7&&si&&si.team!==p.team&&!si.saved&&T-si.T<3){ si.saved=true; markOnTarget(si); ST.saves[p.team]++; p.st.sv++; if(sp>16) queueChance('save',si,p); }
     ball.kicker=null; ball.passBy=null; ball.curve=ball.grav=0; ball.perfect=false; ball.cross=null;
     if(sp>12) addMom(p.team,.06); // シュートを止めたら守備側の勢いが増す
-    if(Math.random()<ch){ ball.owner=p; p.holdT=rnd(.8,1.3); ball.vel.set(0,0,0); ball.lastTouch=p.team; ball.passTo=null; players.forEach(q=>q.receiveT=0); sfx.catch(); if(sp>16) sfx.ooh(); }
+    if(Math.random()<ch){ ball.owner=p; p.holdT=rnd(2,3); ball.vel.set(0,0,0); ball.lastTouch=p.team; ball.passTo=null; players.forEach(q=>q.receiveT=0); sfx.catch(); if(sp>16) sfx.ooh(); }
     else { ball.vel.x=-ball.vel.x*rnd(.2,.45); ball.vel.z+=rnd(-5,5); ball.vel.y=Math.abs(ball.vel.y)*.5+rnd(1,4); ball.lastTouch=p.team; p.pickupCD=.5; sfx.catch(); sfx.ooh(); shake(.2); }
     return;
   }
