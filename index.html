@@ -3483,7 +3483,7 @@ function pitchSVG(key,team,big){
   }
   const T=TEAMS[team], gk='#'+T.gk.toString(16).padStart(6,'0'), r=big?2.1:2.4;
   for(const f of FORMATIONS[key].slots){
-    const x=PX(f.x), y=PY(f.z);
+    const x=team===1&&!big?64-PX(f.x):PX(f.x), y=PY(f.z);
     s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${f.r==='GK'?gk:T.css}" stroke="#0b1410" stroke-width=".45"/>`;
     if(big) s+=`<text x="${x}" y="${y+.85}" text-anchor="middle" font-family="Chakra Petch,sans-serif" font-weight="700" font-size="2.4" fill="${f.r==='GK'?'#fff':T.ink}">${f.n}</text>`;
   }
