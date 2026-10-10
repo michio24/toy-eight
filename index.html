@@ -33,6 +33,8 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 #app #radar.tall{width:min(150px,30vw);aspect-ratio:50/70}
 body.touchui #app #radar{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 62px);width:min(170px,40vw)}
 body.touchui #app #radar.tall{width:min(110px,28vw)}
+/* phone landscape: small map tucked top-right over the stands, clear of the score bug, pause button and thumbs */
+body.touchui #app #radar:not(.tall){top:calc(env(safe-area-inset-top,0px) + 10px);bottom:auto;left:auto;right:calc(env(safe-area-inset-right,0px) + 66px);transform:none;width:min(128px,17vw);opacity:.88;border-radius:6px}
 #replayUI{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .lb{position:absolute;left:0;right:0;height:9vh;background:#05080a;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
 .lb-t{top:0;transform:translateY(-100%)} .lb-b{bottom:0;transform:translateY(100%)}
@@ -100,7 +102,7 @@ body.touchui #app #radar.tall{width:min(110px,28vw)}
 #btns button.down{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.45),inset 0 -2px 0 rgba(0,0,0,.18)}
 #bShoot{right:0;bottom:16px;width:92px;height:92px;background:var(--vinyl);font-size:15px;color:#fff!important}
 #bPass{right:104px;bottom:0;width:74px;height:74px;background:var(--tin);font-size:14px;color:#fff!important}
-#bSprint{right:30px;bottom:118px;width:58px;height:58px;background:var(--gold);font-size:12px}
+#bSprint{right:30px;bottom:118px;width:58px;height:58px;background:var(--gold);font-size:11px;white-space:nowrap;padding:0}
 
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:radial-gradient(ellipse at 50% 40%,rgba(8,16,12,.35),rgba(8,16,12,.8));overflow-y:auto}
 .card{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px 22px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:18px;backdrop-filter:blur(6px)}
