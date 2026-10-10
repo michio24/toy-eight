@@ -491,7 +491,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
       <section class="hsec">
         <h3>テクニック</h3>
         <dl class="keys">
-          <dt>GKのロングキック</dt><dd>自チームのGKがボールを持っているときは、シュート操作でロングキック。長押しで飛距離を伸ばし、移動入力やカーソルで方向を指定</dd>
+          <dt>GKのロングキック</dt><dd>自チームのGKがボールを持っているときは、シュート操作でロングキック。相手より先に着ける味方の前のスペースへ自動で落とす（○と◇で表示）。長押しで遠くの味方を優先し、移動入力で方向、カーソルで狙う味方を指定</dd>
           <dt>2-4-1のクロス</dt><dd>相手側のコーナー付近でパスを長押しすると、ゴール前の味方を狙う浮き球のクロス</dd>
           <dt>ファーストタッチ</dt><dd>自分へのパスが飛んでいる間にパスを押すと、受ける瞬間に移動入力（なければゴール）の方向へボールを置く（◇で表示）。ダッシュ中は大きく離れる。予約しなくても、向き直る入力ならボールを持ったまま前を向く</dd>
           <dt>シュートの適正範囲</dt><dd>ゲージの白い枠の中で離すと鋭く正確なシュート。枠は距離・体勢・敵の寄せで変わり、ため過ぎると精度が落ちる</dd>
@@ -1834,8 +1834,23 @@ function kick(p,ux,uz,v,vy){
   kickoffGuard=false; restartGuard=null;
   sfx.kick(Math.min(1,v/30));
 }
+// 転がるボール（減速 dv/dt=-K·v-C、K・C は会場ごと）を距離 d 先へ、残りの速さ vr で届ける初速 v と到達時間 t。
+// 初速が上限 vmax を超えるなら上限で蹴る（届けば残りの速さを落とし、届かなければ ok=false）
+function rollKick(d,vr,vmax=30){
+  const K=STAD.rollK, c=STAD.rollC/K;
+  const dist=(v0,v1)=>(v0-v1-c*Math.log((v0+c)/(v1+c)))/K, time=(v0,v1)=>Math.log((v0+c)/(v1+c))/K;
+  if(dist(vmax,vr)<d){
+    if(dist(vmax,0)<d) return {v:vmax,t:Infinity,ok:false};
+    let lo=0,hi=vr; for(let i=0;i<24;i++){ const m=(lo+hi)/2; if(dist(vmax,m)>d) lo=m; else hi=m; }
+    return {v:vmax,t:time(vmax,lo),ok:true};
+  }
+  let lo=vr,hi=vmax; for(let i=0;i<24;i++){ const m=(lo+hi)/2; if(dist(m,vr)<d) lo=m; else hi=m; }
+  return {v:hi,t:time(hi,vr),ok:true};
+}
 const groundPassSpeed=d=>clamp(7+d*.8,9,26);
 const loftTime=d=>clamp(.7+d*.035,.9,1.7);
+// 浮き球の水平の速さ：空中の減速（毎秒約5%）を見込み、滞空時間 t で距離 d 先にちょうど落とす（裏へのスルーパス用）
+const loftSpeed=(d,t)=>d/(t*(1-.025*t));
 function passTo(p,q,loft){
   // lead the receiver by the ball's actual travel time
   const d0=dXZ(q.pos,ball.pos);
@@ -1880,11 +1895,50 @@ function shotWindow(p){
   return {lo:mid-w/2,hi:Math.min(.97,mid+w/2)};
 }
 // GKのシュート入力は、シュート数に含めず高い弾道のロングキックにする。
-function longKick(p,gx,gz,c){
+// pl があれば味方の走り込む先へちょうど落とす（空気抵抗で減る分だけ強めに蹴る）。なければチャージで決まる飛距離
+function longKick(p,gx,gz,c,pl=null){
   const dx=gx-ball.pos.x, dz=gz-ball.pos.z, d=Math.hypot(dx,dz)||1;
-  const range=24+c*22, t=1.6+c*.6;
+  const t=1.6+c*.6, range=pl?d/(1-.025*t):24+c*22;
   kick(p,dx/d,dz/d,range/t,(4.905*t*t-(ball.pos.y-BR))/t);
+  if(pl){ const q=pl.q; ball.passTo=q; q.receiveT=t+1.5; countPass(p); if(p.team===0) setActive(q); }
   if(p.team===0) banner('ロングキック','',700);
+}
+// GKのロングキックの狙い：チャージで決まる飛距離の帯にいる味方の走り込む先へ落とす。
+// dir（方向入力）があればその向き（±40°）の味方、aim（カーソル）があればその近くの味方から、相手が先に落下地点へ着けない味方を選ぶ
+// 滞空が長いので、マークされた味方の足元ではなく、味方の前方・斜め外・外側のスペースから味方が先に着ける地点を探す。
+// 飛距離の帯（±9m）で見つからなければ帯を外して探す（ためは「どのくらい遠くを優先するか」になる）
+function gkKickPlan(p,c,dir=null,aim=null){
+  const range=24+c*22, t=1.6+c*.6, d=teamDir(p.team);
+  const search=band=>{ let best=null;
+    for(const q of players){
+      if(q.team!==p.team||q===p||q.role==='GK') continue;
+      const out=Math.sign(q.pos.z)||1;
+      for(const [ux,uz] of [[d,0],[d*.7,out*.7],[0,out]]) for(let L=0;L<=9;L+=3){
+        const lx=clamp(q.pos.x+ux*L,-HL+2,HL-3), lz=clamp(q.pos.z+uz*L,-HW+3,HW-3); // タッチライン際は外に出やすいので避ける
+        const dx=lx-p.pos.x, dz=lz-p.pos.z, dist=Math.hypot(dx,dz);
+        if(dist<12||dist>52) continue;
+        if(aim){ if(Math.hypot(lx-aim.x,lz-aim.z)>7) continue; }
+        else if(band&&Math.abs(dist-range)>9) continue;
+        if(dir&&(dx*dir.x+dz*dir.z)/dist<.76) continue;
+        const recv=Math.hypot(lx-q.pos.x,lz-q.pos.z)/SPRINT+.1;
+        if(recv>t+.8) continue;
+        // 落下地点へ先に着いた方が競り勝つ：相手の到着時間との差が余裕
+        let margin=9;
+        for(const o of players){ if(o.team===p.team) continue; const os=SPRINT*(o.team===1?diff.spd:1);
+          margin=Math.min(margin,Math.max(0,Math.hypot(o.pos.x-lx,o.pos.z-lz)-.8)/os+.25-recv); }
+        if(margin<.15) continue;
+        const s=Math.min(margin,1.5)*2-(aim?Math.hypot(lx-aim.x,lz-aim.z)*.3:Math.abs(dist-range)*.12)+dx*d*.03;
+        if(!best||s>best.s) best={q,x:lx,z:lz,s};
+      }
+    }
+    return best; };
+  return search(true)||(aim?null:search(false));
+}
+// ユーザー側GKのロングキックの入力（方向入力・カーソル）を読み取る
+function gkKickInput(p){
+  const i=inputVec();
+  if(mouse.on&&mouse.inside) return {aim:{x:mouse.x,z:mouse.z},dir:null};
+  return {aim:null,dir:i.m>.2?{x:i.x,z:i.z}:null};
 }
 function shotInfoOf(p,sx,sz,v,c){
   return {T,x:sx,z:sz,v,c,p,team:p.team,oneTouch:T-(p.gotT||-9)<.7,drib:p.drib||0,fromThrough:!!(p.throughT&&p.gotT>=p.throughT&&T-p.throughT<8),skill:p.skillN||0};
@@ -1971,8 +2025,28 @@ function bestPassTarget(p,pref,loft=false){
 }
 // through ball: pick a teammate and a spot in space ahead of him that he reaches before any defender
 const throughSpeed=d=>clamp(5.5+d*.9,9,28);
+// 裏へのスルーパスは強めに蹴る：会場の転がりにくさを考え、走り込む先に8〜14m/sの速さで届く初速（最大34m/s）
+const throughRoll=d=>rollKick(d,clamp(5+d*.35,8,14),34);
 // 裏パス・ロングフィード用の浮き球：通常の浮き球より強く蹴って滞空を短く、遠くまで届かせる
 const longLoftTime=d=>clamp(.55+d*.028,.75,1.5);
+// 低い弾道の区間は、落下地点だけでなく蹴り出し直後も相手が触れるか調べる。
+function throughLaneClear(tx,tz,dist,roll,loft,tBall,team){
+  const dx=tx-ball.pos.x, dz=tz-ball.pos.z, K=STAD.rollK, c=STAD.rollC/K;
+  const v=loft?loftSpeed(dist,tBall):roll.v;
+  const opponents=players.filter(o=>o.team!==team);
+  for(let step=0;step<=Math.ceil((tBall-.1)/.05);step++){
+    const t=Math.min(tBall,.1+step*.05);
+    const y=loft?ball.pos.y+4.905*tBall*t-4.905*t*t:BR;
+    const travel=loft?v*(1-Math.exp(-.05*t))/.05:(v+c)*(1-Math.exp(-K*t))/K-c*t;
+    const f=clamp(travel/dist,0,1), x=ball.pos.x+dx*f, z=ball.pos.z+dz*f;
+    for(const o of opponents){
+      if(y>(o.role==='GK'?2.7:.8)) continue;
+      const os=SPRINT*(o.team===1?diff.spd:1);
+      if(Math.max(0,Math.hypot(o.pos.x-x,o.pos.z-z)-.8)/os<=t) return false;
+    }
+  }
+  return true;
+}
 function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
   const d=teamDir(p.team); let best=null;
   for(const q of players){
@@ -1982,23 +2056,24 @@ function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
     const roleB=q.role==='FW'?1.2:q.role==='MF'?.5:-.6;
     const vl=Math.hypot(q.vel.x,q.vel.z);
     let rx=d+(vl>1?q.vel.x/vl*.35:0), rz=-q.pos.z*.035+(vl>1?q.vel.z/vl*.35:0); const rl=Math.hypot(rx,rz)||1; rx/=rl; rz/=rl;
-    for(let L=5;L<=19;L+=2){
-      const Lx=L+extra;
-      const tx=clamp(q.pos.x+rx*Lx,-HL+2,HL-3), tz=clamp(q.pos.z+rz*Lx,-HW+1.5,HW-1.5);
-      const dx=tx-p.pos.x, dz=tz-p.pos.z, dist=Math.hypot(dx,dz);
+    // ウイングは中央寄りの一本だけでなく、外側・内側の走り込み先も探す。
+    for(const angle of q.wing?[0,-.35,.35]:[0]) for(let L=5;L<=19;L+=2){
+      const Lx=L+extra, ux=rx*Math.cos(angle)-rz*Math.sin(angle), uz=rx*Math.sin(angle)+rz*Math.cos(angle);
+      const tx=clamp(q.pos.x+ux*Lx,-HL+2,HL-3), tz=clamp(q.pos.z+uz*Lx,-HW+1.5,HW-1.5);
+      const dx=tx-ball.pos.x, dz=tz-ball.pos.z, dist=Math.hypot(dx,dz);
       if(dist<6||dist>44) continue;
-      const tGround=dist/(throughSpeed(dist)*.75), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
+      const roll=throughRoll(dist), tGround=Math.min(4,roll.t), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
       // 地上のコースに相手が入れるか
       let lane=0;
       for(const o of players){ if(o.team===p.team) continue;
         const os=SPRINT*(o.team===1?diff.spd:1);
-        const [sd,t]=segDist(o.pos.x,o.pos.z,p.pos.x,p.pos.z,tx,tz);
+        const [sd,t]=segDist(o.pos.x,o.pos.z,ball.pos.x,ball.pos.z,tx,tz);
         if(t>.05&&t<.95){ const m2=(Math.max(0,sd-.75)/os+.22)-t*tGround; if(m2<0) lane+=2-m2*3; }
       }
-      // 遠い、または間に相手がいるなら浮き球で頭越しに落とす（コースの危険はなくなるが滞空時間がかかる）
-      const loft=dist>LOFT_THROUGH_DIST||lane>0;
+      // 遠い、または間に相手がいるなら浮き球で頭越しに落とす（低い弾道の区間は別途確認）
+      const loft=dist>LOFT_THROUGH_DIST||lane>0||!roll.ok; // 地上では届かない距離も浮き球
       const tBall=loft?longLoftTime(dist):tGround;
-      if(tRecv>tBall+1.0) continue;
+      if(tRecv>tBall+1.0||!throughLaneClear(tx,tz,dist,roll,loft,tBall,p.team)) continue;
       const arrive=Math.max(tRecv,tBall);
       let margin=9;
       for(const o of players){ if(o.team===p.team) continue;
@@ -2006,7 +2081,7 @@ function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
         const oT=Math.max(0,Math.hypot(o.pos.x-tx,o.pos.z-tz)-.8)/os+react;
         margin=Math.min(margin,oT-arrive);
         // 浮き球は落ち際（距離の約8割、滞空の約9割の時点）で相手の頭を越えなくなるので、そこへの先回りも見る
-        if(loft){ const cx=p.pos.x+(tx-p.pos.x)*.8, cz=p.pos.z+(tz-p.pos.z)*.8;
+        if(loft){ const cx=ball.pos.x+(tx-ball.pos.x)*.8, cz=ball.pos.z+(tz-ball.pos.z)*.8;
           margin=Math.min(margin,Math.max(0,Math.hypot(o.pos.x-cx,o.pos.z-cz)-.8)/os+react-tBall*.9); }
       }
       if(margin<minMargin) continue;
@@ -2025,8 +2100,8 @@ function throughPass(p,plan){
   let crossT=0;
   // クロスは狙った地点を頭の高さ（約1.7m）で通る弾道にする（空気抵抗で減る分だけ強めに蹴る）
   if(plan.cross){ const t=crossT=clamp(.85+d*.03,1,1.5); kick(p,dx/d,dz/d,d/t/(1-.03*t),(1.7-ball.pos.y)/t+4.905*t); q.receiveT=t+1.6; }
-  else if(plan.loft){ const t=longLoftTime(d); kick(p,dx/d,dz/d,d*.94/t,4.905*t); q.receiveT=t+1.6; } // 狙った地点に落ちる浮き球
-  else { const v=throughSpeed(d); kick(p,dx/d,dz/d,v,.12); q.receiveT=d/(v*.75)+1.6; }
+  else if(plan.loft){ const t=longLoftTime(d); kick(p,dx/d,dz/d,loftSpeed(d,t),4.905*t); q.receiveT=t+1.6; } // 狙った地点に落ちる浮き球
+  else { const r=throughRoll(d); kick(p,dx/d,dz/d,r.v,.12); q.receiveT=Math.min(4,r.t)+1.6; }
   ball.passTo=q; q.throughT=plan.cross?0:T;
   countPass(p);
   if(p.team===0){ setActive(q); banner(plan.cross?'クロス':(q.wing?'ウイングへ':'')+(plan.loft?'浮き球の裏パス':q.wing?'裏パス':'スルーパス'),'',700); }
@@ -2093,7 +2168,7 @@ function wingThroughPlan(){
   const wings=players.filter(q=>q.team===0&&q.wing&&q!==active);
   const pick=side?wings.filter(q=>Math.sign(q.base.z)===side):wings;
   const only=q=>pick.includes(q);
-  return throughPlan(active,null,extra,aim,only)||throughPlan(active,null,extra,aim,only,-9)||(side?throughPlan(active,null,extra,aim,q=>wings.includes(q),-9):null);
+  return throughPlan(active,null,extra,aim,only,0)||(side?throughPlan(active,null,extra,aim,q=>wings.includes(q),0):null);
 }
 // 長押しで選ぶ左右（カーソル or スティック、0 は指定なし）
 function holdSide(){
@@ -2332,9 +2407,12 @@ const directFK=()=>!!(restartGuard&&restartGuard.kind==='fk'&&restartGuard.direc
 function userShoot(c){
   const p=shootingPlayer();
   if(p&&p.role==='GK'){
-    const i=inputVec(), d=teamDir(p.team);
-    const aim=mouse.on&&mouse.inside?{x:mouse.x,z:mouse.z}:i.m>.2?{x:p.pos.x+i.x*46,z:p.pos.z+i.z*46}:{x:p.pos.x+d*46,z:p.pos.z};
-    shoot(p,aim.x,aim.z,c); return;
+    const d=teamDir(p.team), {aim,dir}=gkKickInput(p), pl=gkKickPlan(p,c,dir,aim);
+    if(pl){ longKick(p,pl.x,pl.z,c,pl); return; }
+    // 狙える味方がいなければ、指定した方向（なければ相手の少ないサイドの前方）へチャージの飛距離で蹴る
+    let side=0; for(const o of players) if(o.team!==p.team&&o.role!=='GK') side+=Math.sign(o.pos.z);
+    const a=aim||(dir?{x:p.pos.x+dir.x*46,z:p.pos.z+dir.z*46}:{x:p.pos.x+d*40,z:(side>0?-1:1)*HW*.65});
+    shoot(p,a.x,a.z,c); return;
   }
   let aimZ=userAimZ();
   const press=players.some(o=>o.team===1&&dXZ(o.pos,active.pos)<1.6);
@@ -3189,6 +3267,10 @@ function updateVisuals(dt){
     const gk=shooter.role==='GK', w=gk?null:shotWindow(shooter); meterWin.hidden=gk;
     if(w){ meterWin.style.left=(w.lo*100)+'%'; meterWin.style.width=((w.hi-w.lo)*100)+'%'; }
     meter.classList.toggle('sweet',!!w&&charge>=w.lo&&charge<=w.hi);
+    // GKのロングキック：ため具合に応じて狙う味方（○）と落下地点（◇）を表示
+    if(gk){ const {aim,dir}=gkKickInput(shooter), pl=gkKickPlan(shooter,Math.max(.15,charge),dir,aim);
+      targetRing.visible=throughMark.visible=!!pl;
+      if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.x,.05,pl.z); throughMark.rotation.z+=dt*4; throughMark.scale.set(1,1,1); } }
   } else if(!charging) meter.hidden=true;
   }
   // nets
