@@ -133,13 +133,15 @@ body.touchui #app #radar:not(.tall){top:calc(env(safe-area-inset-top,0px) + 10px
 #stickZone{position:absolute;left:0;top:30%;bottom:0;width:50%;pointer-events:auto}
 #stick{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(243,239,226,.35);background:rgba(10,18,14,.25);pointer-events:none;opacity:.55}
 #stick.on{opacity:1}
+/* 大きく引いてダッシュ中：外周とノブを金色に */
+#stick.dash{border-color:var(--gold);box-shadow:0 0 14px rgba(255,210,63,.45)}
+#stick.dash #knob{background:var(--gold)}
 #knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(243,239,226,.85);box-shadow:0 3px 0 rgba(0,0,0,.35)}
 #btns{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:200px;height:170px;pointer-events:none}
 #btns button{position:absolute;pointer-events:auto;border-radius:50%;border:none;font-weight:700;color:var(--ink);box-shadow:0 5px 0 rgba(0,0,0,.45),inset 0 -4px 0 rgba(0,0,0,.18),inset 0 3px 0 rgba(255,255,255,.45);touch-action:none}
 #btns button.down{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.45),inset 0 -2px 0 rgba(0,0,0,.18)}
 #bShoot{right:0;bottom:16px;width:92px;height:92px;background:var(--vinyl);font-size:15px;color:#fff!important}
 #bPass{right:104px;bottom:0;width:74px;height:74px;background:var(--tin);font-size:14px;color:#fff!important}
-#bSprint{right:30px;bottom:118px;width:58px;height:58px;background:var(--gold);font-size:11px;white-space:nowrap;padding:0}
 
 .overlay{position:absolute;inset:0;display:flex;padding:calc(env(safe-area-inset-top,0px) + 20px) 16px calc(env(safe-area-inset-bottom,0px) + 20px);background:radial-gradient(ellipse at 50% 40%,rgba(8,16,12,.35),rgba(8,16,12,.82));overflow-y:auto;overscroll-behavior:contain}
 /* margin:auto で中央寄せ（縦にはみ出す時も上端が切れずにスクロールできる） */
@@ -335,7 +337,6 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
     <div id="stickZone"></div>
     <div id="stick"><div id="knob"></div></div>
     <div id="btns">
-      <button id="bSprint" data-b="sprint">ダッシュ</button>
       <button id="bPass" data-b="pass">パス</button>
       <button id="bShoot" data-b="shoot">シュート</button>
     </div>
@@ -481,8 +482,8 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
       <section class="hsec">
         <h3>スマホ・タブレット</h3>
         <dl class="keys">
-          <dt>画面左半分</dt><dd>ドラッグで移動（スティック）</dd>
-          <dt>ボタン</dt><dd>パス／シュート／ダッシュ。長押しの動きはキーボードと同じ</dd>
+          <dt>画面左半分</dt><dd>ドラッグで移動（スティック）。大きく引くとダッシュ</dd>
+          <dt>ボタン</dt><dd>パス／シュート。長押しの動きはキーボードと同じ</dd>
         </dl>
       </section>
       <section class="hsec">
@@ -1925,7 +1926,9 @@ function bestPassTarget(p,pref,loft=false){
   return best;
 }
 // through ball: pick a teammate and a spot in space ahead of him that he reaches before any defender
-const throughSpeed=d=>clamp(4.5+d*.8,8,24);
+const throughSpeed=d=>clamp(5.5+d*.9,9,28);
+// 裏パス・ロングフィード用の浮き球：通常の浮き球より強く蹴って滞空を短く、遠くまで届かせる
+const longLoftTime=d=>clamp(.55+d*.028,.75,1.5);
 function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
   const d=teamDir(p.team); let best=null;
   for(const q of players){
@@ -1935,11 +1938,11 @@ function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
     const roleB=q.role==='FW'?1.2:q.role==='MF'?.5:-.6;
     const vl=Math.hypot(q.vel.x,q.vel.z);
     let rx=d+(vl>1?q.vel.x/vl*.35:0), rz=-q.pos.z*.035+(vl>1?q.vel.z/vl*.35:0); const rl=Math.hypot(rx,rz)||1; rx/=rl; rz/=rl;
-    for(let L=5;L<=15;L+=2){
+    for(let L=5;L<=19;L+=2){
       const Lx=L+extra;
       const tx=clamp(q.pos.x+rx*Lx,-HL+2,HL-3), tz=clamp(q.pos.z+rz*Lx,-HW+1.5,HW-1.5);
       const dx=tx-p.pos.x, dz=tz-p.pos.z, dist=Math.hypot(dx,dz);
-      if(dist<6||dist>36) continue;
+      if(dist<6||dist>44) continue;
       const tGround=dist/(throughSpeed(dist)*.75), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
       // 地上のコースに相手が入れるか
       let lane=0;
@@ -1950,7 +1953,7 @@ function throughPlan(p,pref,extra=0,aim=null,only=null,minMargin=-.15){
       }
       // 遠い、または間に相手がいるなら浮き球で頭越しに落とす（コースの危険はなくなるが滞空時間がかかる）
       const loft=dist>LOFT_THROUGH_DIST||lane>0;
-      const tBall=loft?loftTime(dist):tGround;
+      const tBall=loft?longLoftTime(dist):tGround;
       if(tRecv>tBall+1.0) continue;
       const arrive=Math.max(tRecv,tBall);
       let margin=9;
@@ -1975,7 +1978,7 @@ const LOFT_THROUGH_DIST=22;
 function throughPass(p,plan){
   const dx=plan.tx-ball.pos.x, dz=plan.tz-ball.pos.z, d=Math.hypot(dx,dz)||1;
   const q=plan.q;
-  if(plan.loft){ const t=loftTime(d); kick(p,dx/d,dz/d,d*.94/t,4.905*t); q.receiveT=t+1.6; } // 狙った地点に落ちる浮き球
+  if(plan.loft){ const t=longLoftTime(d); kick(p,dx/d,dz/d,d*.94/t,4.905*t); q.receiveT=t+1.6; } // 狙った地点に落ちる浮き球
   else { const v=throughSpeed(d); kick(p,dx/d,dz/d,v,.12); q.receiveT=d/(v*.75)+1.6; }
   ball.passTo=q; q.throughT=T;
   countPass(p);
@@ -1983,7 +1986,7 @@ function throughPass(p,plan){
 }
 // 2-4-1: long press sends the ball in behind for a winger; stick/cursor picks the side
 function wingThroughPlan(){
-  const extra=clamp((passHold-.22)/.7,0,1)*4;
+  const extra=clamp((passHold-.22)/.7,0,1)*6;
   const aim=mouse.on&&mouse.inside?{x:mouse.x,z:mouse.z}:null;
   const side=holdSide();
   const wings=players.filter(q=>q.team===0&&q.wing&&q!==active);
@@ -2054,11 +2057,11 @@ function feedPlan(p,side=0,extra=0,aim=null){
     if(q.team!==p.team||q===p||q.role!=='FW') continue;
     if(side&&Math.sign(q.pos.z-p.pos.z||q.base.z*d)!==side) continue;
     let rx=d, rz=-q.pos.z*.03; const rl=Math.hypot(rx,rz); rx/=rl; rz/=rl;
-    for(let L=2;L<=8+extra;L+=1.5){
+    for(let L=2;L<=10+extra;L+=1.5){
       const tx=clamp(q.pos.x+rx*L,-HL+2,HL-3), tz=clamp(q.pos.z+rz*L,-HW+1.5,HW-1.5);
       const dist=Math.hypot(tx-p.pos.x,tz-p.pos.z);
-      if(dist<9||dist>38) continue;
-      const tBall=loftTime(dist), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
+      if(dist<9||dist>46) continue;
+      const tBall=longLoftTime(dist), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
       if(tRecv>tBall+.8) continue;
       const arrive=Math.max(tRecv,tBall);
       let margin=9;
@@ -2075,12 +2078,12 @@ function feedPlan(p,side=0,extra=0,aim=null){
   return best;
 }
 function feedPlanUser(){
-  const extra=clamp((passHold-.22)/.7,0,1)*6, side=holdSide();
+  const extra=clamp((passHold-.22)/.7,0,1)*8, side=holdSide();
   const aim=mouse.on&&mouse.inside?{x:mouse.x,z:mouse.z}:null;
   return feedPlan(active,side,extra,aim)||(side?feedPlan(active,0,extra,aim):null);
 }
 function longFeed(p,plan){
-  const dx=plan.tx-ball.pos.x, dz=plan.tz-ball.pos.z, d=Math.hypot(dx,dz)||1, t=loftTime(d);
+  const dx=plan.tx-ball.pos.x, dz=plan.tz-ball.pos.z, d=Math.hypot(dx,dz)||1, t=longLoftTime(d);
   kick(p,dx/d,dz/d,d*.94/t,4.905*t);
   const q=plan.q; ball.passTo=q; q.receiveT=t+1.6; q.throughT=T; q.runUntil=T+t+.6;
   // もう一人の FW もゴール前へ走り込ませて落としを狙う
@@ -2104,7 +2107,7 @@ function intercept(p,spd=7.5){ const tmin=landTime()*.9; let t=tmin,f=ballFuture
 // ---------- input ----------
 const keys={}; const btn={pass:false,shoot:false,sprint:false};
 let passHold=0, passing=false, charging=false, charge=0;
-const stick={x:0,y:0,id:null};
+const stick={x:0,y:0,id:null,dash:false};
 const camF=new THREE.Vector3(0,0,-1);
 // mouse: the active player runs toward the cursor on the pitch
 const mouse={on:false,inside:false,sx:0,sy:0,x:0,z:0};
@@ -2131,7 +2134,7 @@ function inputVec(){
   const wm=Math.hypot(wx,wz)||1;
   return {x:wx/wm,z:wz/wm,m};
 }
-const sprinting=()=>btn.sprint||keys.ShiftLeft||keys.ShiftRight||(mouse.on&&mouse.inside&&mouseDist()>7);
+const sprinting=()=>btn.sprint||stick.dash||keys.ShiftLeft||keys.ShiftRight||(mouse.on&&mouse.inside&&mouseDist()>7);
 function canAct(){ return state==='play' && !paused && active; }
 // how long a defender needs to get goal-side of the threat (lower is better)
 function defCost(p){
@@ -2294,9 +2297,13 @@ $('#stickZone').addEventListener('pointerdown',e=>{
 });
 $('#stickZone').addEventListener('pointermove',e=>{
   if(e.pointerId!==stick.id) return; let dx=e.clientX-stick.cx, dy=e.clientY-stick.cy; const m=Math.hypot(dx,dy), R=56;
-  if(m>R){dx*=R/m;dy*=R/m;} stick.x=dx/R; stick.y=dy/R; knob.style.transform=`translate(${dx}px,${dy}px)`;
+  // スティック半径を超えてさらに引き込むとダッシュ（境目のチラつき防止に解除はやや内側）
+  const dash=m>(stick.dash?R*1.18:R*1.36);
+  if(dash!==stick.dash){ stick.dash=dash; stickEl.classList.toggle('dash',dash); if(dash&&navigator.vibrate) try{navigator.vibrate(8);}catch(_){} }
+  if(m>R){dx*=R/m;dy*=R/m;} stick.x=dx/R; stick.y=dy/R;
+  const kx=dash?dx*1.2:dx, ky=dash?dy*1.2:dy; knob.style.transform=`translate(${kx}px,${ky}px)`;
 });
-const endStick=e=>{ if(e.pointerId!==stick.id) return; stick.id=null; stick.x=stick.y=0; knob.style.transform=''; stickEl.classList.remove('on'); };
+const endStick=e=>{ if(e.pointerId!==stick.id) return; stick.id=null; stick.x=stick.y=0; stick.dash=false; knob.style.transform=''; stickEl.classList.remove('on','dash'); };
 $('#stickZone').addEventListener('pointerup',endStick); $('#stickZone').addEventListener('pointercancel',endStick);
 stickEl.style.left='22%'; stickEl.style.top='78%';
 document.querySelectorAll('#btns button').forEach(b=>{
