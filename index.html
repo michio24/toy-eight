@@ -2309,7 +2309,8 @@ const CUR_IDLE=new THREE.Color(1.6,1.6,1.6), CUR_HOT=new THREE.Color(.6,1.4,2.2)
 const cursorRing=new THREE.Mesh(new THREE.RingGeometry(.32,.42,32),new THREE.MeshBasicMaterial({color:CUR_IDLE.clone(),transparent:true,opacity:.85,depthWrite:false}));
 cursorRing.rotation.x=-Math.PI/2; cursorRing.visible=false; scene.add(cursorRing);
 const cv=renderer.domElement;
-cv.addEventListener('contextmenu',e=>e.preventDefault());
+// 右クリックメニューは canvas だけでなく、スティック領域など上に重なるUIでも抑止する
+app.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointermove',e=>{ if(e.pointerType!=='mouse') return; mouse.sx=e.clientX; mouse.sy=e.clientY; mouse.inside=true; if(!mouse.on&&(Math.abs(e.movementX)+Math.abs(e.movementY))>2){ mouse.on=true; cv.style.cursor='crosshair'; } });
 cv.addEventListener('pointerleave',e=>{ if(e.pointerType==='mouse') mouse.inside=false; });
 cv.addEventListener('pointerenter',e=>{ if(e.pointerType==='mouse') mouse.inside=true; });
