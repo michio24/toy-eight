@@ -8,7 +8,7 @@
 :root{
   color-scheme: dark;
   --ink:#0b1410; --panel:rgba(14,26,20,.86); --panel-solid:#12211a; --line:#2c4638;
-  --chalk:#f3efe2; --muted:#a5bbae; --tin:#3b74e2; --vinyl:#ec5444; --gold:#ffd23f;
+  --chalk:#f3efe2; --muted:#a5bbae; --tin:#3b74e2; --vinyl:#ec5444; --gold:#ffd23f; --t1:#e8862a;
   --f-display:'Dela Gothic One','Hiragino Sans','Yu Gothic',sans-serif;
   --f-body:'Zen Kaku Gothic New','Hiragino Sans','Yu Gothic',sans-serif;
   --f-num:'Chakra Petch','Zen Kaku Gothic New',monospace;
@@ -23,7 +23,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .bug{display:flex;align-items:stretch;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;font-variant-numeric:tabular-nums;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 .bug .tm{display:flex;align-items:center;gap:6px;padding:6px 10px;font-weight:700;font-size:13px;letter-spacing:.02em;white-space:nowrap}
 .bug .tm i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
-.bug .t0 i{background:var(--tin)} .bug .t1 i{background:var(--vinyl)}
+.bug .t0 i{background:var(--tin)} .bug .t1 i{background:var(--t1)}
 .bug .sc{font-family:var(--f-num);font-size:20px;font-weight:700;padding:2px 10px;background:var(--chalk);color:var(--ink);display:flex;align-items:center;gap:6px}
 .bug .clk{font-family:var(--f-num);font-weight:600;font-size:13px;padding:6px 10px;color:var(--gold);border-left:1px solid var(--line);display:flex;align-items:center;white-space:nowrap}
 /* 勢いゲージ：中央から外側へ伸びる2本のバー。ラッシュ中は点滅 */
@@ -33,7 +33,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .mb{flex:1;height:6px;border-radius:3px;background:rgba(10,18,14,.7);border:1px solid var(--line);overflow:hidden;display:flex}
 .mb.m0{justify-content:flex-end}
 .mb i{display:block;height:100%;width:0;transition:width .2s}
-.m0 i{background:var(--tin)} .m1 i{background:var(--vinyl)}
+.m0 i{background:var(--tin)} .m1 i{background:var(--t1)}
 .mb.full i{background:var(--gold)}
 .mb.rush{border-color:var(--gold);animation:rush .5s ease-in-out infinite alternate}
 @keyframes rush{to{box-shadow:0 0 10px var(--gold)}}
@@ -106,6 +106,12 @@ body.touchui #app #radar:not(.tall){top:calc(env(safe-area-inset-top,0px) + 10px
 #meter{position:absolute;width:72px;height:9px;margin-left:-36px;border-radius:5px;background:rgba(10,18,14,.8);border:1px solid var(--line);overflow:hidden;pointer-events:none}
 #meter i{position:absolute;top:0;bottom:0;left:72%;width:15%;background:rgba(255,255,255,.18)}
 #meterFill{height:100%;width:0;background:linear-gradient(90deg,#7fd36b,var(--gold) 70%,var(--vinyl))}
+/* 操作中の選手／ボールを持つ敵の名札（読みは上に小さく） */
+.nameTag{position:absolute;pointer-events:none;transform:translate(-50%,-100%);text-align:center;white-space:nowrap;line-height:1.15}
+.nameTag small{display:block;font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--chalk);text-shadow:0 1px 2px rgba(0,0,0,.8);margin-bottom:1px}
+.nameTag b{display:block;font-size:13px;font-weight:700;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-bottom:2px solid var(--tin);padding:2px 8px;border-radius:4px}
+.nameTag.cpu b{border-bottom-color:var(--t1)}
+.nameTag small[hidden]{display:none}
 
 #touch{position:absolute;inset:0;pointer-events:none}
 #stickZone{position:absolute;left:0;top:30%;bottom:0;width:50%;pointer-events:auto}
@@ -130,7 +136,7 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
 .club{border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;min-height:56px;box-sizing:border-box;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
 .club b{font-size:16px;font-weight:700;line-height:1.2} .club small{font-size:11px;font-weight:500;opacity:.85}
-.club.c0{background:var(--tin);color:#fff} .club.c1{background:var(--vinyl);color:#fff;text-align:right}
+.club.c0{background:var(--tin);color:#fff} .club.c1{background:var(--t1);color:#fff;text-align:right}
 .vs > span{font-family:var(--f-display);color:var(--muted)}
 .seg{display:flex;gap:6px}
 .seg button{flex:1;min-width:0;padding:11px 0;border-radius:8px;border:1px solid var(--line);background:rgba(0,0,0,.12);font-weight:700;font-size:14px}
@@ -166,7 +172,7 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .back:hover{border-color:var(--muted);background:rgba(255,255,255,.05)}
 .team-eb{display:flex;align-items:center;gap:6px}
 .team-eb i{width:9px;height:9px;border-radius:50%;background:var(--tin)}
-.team-eb.t1 i{background:var(--vinyl)}
+.team-eb.t1 i{background:var(--t1)}
 .fseg button{font-family:var(--f-num);font-size:15px}
 .pitch{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
 .fd{display:flex;flex-direction:column;gap:12px}
@@ -187,6 +193,24 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .legend span{display:flex;align-items:center;gap:6px}
 .legend i{width:18px;height:0;border-top:2px solid var(--gold)}
 .legend i.run{border-top:2px dashed var(--chalk)}
+
+/* 対戦相手（チームと強さ）選択 */
+.tpick{border:none;font:inherit;cursor:pointer;transition:filter .15s,transform .1s}
+.tpick:hover{filter:brightness(1.1)}
+.tpick:active{transform:scale(.98)}
+.tpick .go{font-weight:700;opacity:1;margin-left:6px}
+.tview{max-width:520px}
+.tlist{display:flex;flex-direction:column;gap:8px}
+.topt{display:grid;grid-template-columns:8px 1fr auto;gap:12px;align-items:center;padding:12px 14px 12px 0;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.18);text-align:left;overflow:hidden;transition:border-color .15s,background .15s}
+.topt:hover{border-color:var(--muted)}
+.topt[aria-pressed="true"]{border-color:var(--chalk);background:rgba(255,255,255,.08)}
+.topt>i{align-self:stretch;margin:-12px 0;background:var(--c)}
+.topt b{display:block;font-size:16px;font-weight:700;line-height:1.3}
+.topt small{font-size:11px;font-weight:700;color:var(--muted)}
+.lv{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px;font-weight:700}
+.lv .pips i{flex:none;width:14px}
+.roster{display:flex;flex-wrap:wrap;gap:6px}
+.roster span{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
 
 /* 操作説明 */
 #helpOv{background:rgba(6,12,9,.8)}
@@ -221,7 +245,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
       <div class="bug" aria-live="polite">
         <div class="tm t0"><i></i><span>ブリキFC</span></div>
         <div class="sc"><span id="s0">0</span><span>-</span><span id="s1">0</span></div>
-        <div class="tm t1"><span>ソフビUTD</span><i></i></div>
+        <div class="tm t1"><span class="tn1">ツミキ・シティ</span><i></i></div>
         <div class="clk" id="clock">前半 00:00</div>
       </div>
       <div class="mom" aria-label="勢いゲージ"><div class="mb m0" id="mb0"><i id="m0"></i></div><small>勢い</small><div class="mb m1" id="mb1"><i id="m1"></i></div></div>
@@ -250,6 +274,8 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
     <div class="gc-skip">クリック / キーで次へ</div>
   </div>
   <div id="meter" hidden><i></i><div id="meterFill"></div></div>
+  <div id="nameTag" class="nameTag" hidden><small></small><b></b></div>
+  <div id="cpuTag" class="nameTag cpu" hidden><small></small><b></b></div>
   <div id="skillPop"></div>
   <div id="touch" hidden>
     <div id="stickZone"></div>
@@ -277,25 +303,31 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
           </button>
         </div>
         <div class="side">
-          <div class="club c1"><b>ソフビUTD</b><small>CPU・ソフビ製</small></div>
-          <button class="fpick" id="fPick1" data-team="1" aria-label="ソフビUTDのフォーメーションを変更">
+          <button class="club c1 tpick" id="tPick" aria-label="対戦相手のチームと強さを変更"><b class="tn1">ツミキ・シティ</b><small><span id="cpuDesc">CPU・ふつう</span><span class="go">変更 ›</span></small></button>
+          <button class="fpick" id="fPick1" data-team="1" aria-label="CPUチームのフォーメーションを変更">
             <svg viewBox="0 0 64 44" aria-hidden="true"></svg>
             <span class="fp-row"><span class="fp-name"></span><span class="fp-tag"></span><span class="fp-go">変更 ›</span></span>
           </button>
-        </div>
-      </div>
-      <div class="field">
-        <div class="label">CPUの強さ</div>
-        <div class="seg" id="diffSeg">
-          <button id="d-easy" data-d="easy" aria-pressed="false">かんたん</button>
-          <button id="d-normal" data-d="normal" aria-pressed="true">ふつう</button>
-          <button id="d-hard" data-d="hard" aria-pressed="false">むずかしい</button>
         </div>
       </div>
       <div class="menu-sub">
         <button class="cta" id="startBtn">キックオフ</button>
         <button class="ghost" id="helpBtn">操作説明・ルール</button>
       </div>
+    </div>
+
+    <div class="card tview" id="teamView" hidden>
+      <div class="vhead">
+        <button class="back" id="teamBack" aria-label="戻る">‹</button>
+        <div><div class="eyebrow">対戦相手（CPU）</div><h2>チームと強さ</h2></div>
+      </div>
+      <div class="tlist" id="tvList" role="group" aria-label="対戦相手"></div>
+      <div class="fd">
+        <p id="tvText"></p>
+        <div class="label">選手</div>
+        <div class="roster" id="tvRoster"></div>
+      </div>
+      <button class="cta" id="teamOk">決定</button>
     </div>
 
     <div class="card fview" id="formView" hidden>
@@ -333,7 +365,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
     <div class="card">
       <div class="eyebrow">試合終了</div>
       <div class="vs">
-        <div class="club c0"><b>ブリキFC</b></div><span></span><div class="club c1"><b>ソフビUTD</b></div>
+        <div class="club c0"><b>ブリキFC</b></div><span></span><div class="club c1"><b class="tn1">ツミキ・シティ</b></div>
       </div>
       <div class="final" id="finalScore">0 - 0</div>
       <div class="result" id="resultText">引き分け</div>
@@ -426,11 +458,66 @@ const DIFF={
   normal:{spd:.95,react:.55,tackle:1.0,win:.5,gk:1,err:1},
   hard:{spd:1.02,react:.3,tackle:1.4,win:.62,gk:1.15,err:.65}
 };
-let diff=DIFF.normal;
-const TEAMS=[
-  {name:'ブリキFC',shirt:0x2f66d6,shorts:0xf1e4c3,sock:0x2f66d6,gk:0xf2c21c,metal:.5,rough:.28,cc:1},
-  {name:'ソフビUTD',shirt:0xe6483b,shorts:0x23264a,sock:0xe6483b,gk:0x2bb06a,metal:0,rough:.44,cc:.35}
-];
+// roster: 選手名簿（生成順＝見た目に固定。背番号・ポジションはフォーメーションで変わる）
+// given/givenKana: 名札に出す名前（和名は下の名前、海外風は前半）
+// 0番目は常にGK、7番目は常にFW
+// style: 選手の飾り（tin=ゼンマイ＋リベット / vinyl=たすき＋頭の継ぎ目 / wood=しま模様 / metal=リベット＋V字アンテナ）
+// css: UIでのチーム色、fan2: 応援席の2色目
+// カタカナ名（名・姓）から名簿エントリを作る：読みは同じ、名前は前半
+const kata=n=>{ const g=n.split('・')[0]; return {name:n,kana:n.replace('・',' '),given:g,givenKana:g}; };
+const BRIKI={name:'ブリキFC',desc:'ブリキ製',style:'tin',css:'#3b74e2',shirt:0x2f66d6,shorts:0xf1e4c3,sock:0x2f66d6,gk:0xf2c21c,trim:0xf1e4c3,fan2:0xf1e4c3,
+  glove:0xf3efe2,crest:0xffd23f,num:'#f3efe2',metal:.5,rough:.28,cc:1,shortsMetal:.35,trimMetal:.45,crestMetal:.8,roster:[
+    {name:'門前 止衛門',kana:'モンゼン トメエモン',given:'止衛門',givenKana:'トメエモン'},   // ゴール前で何でも止める
+    {name:'削田 ガツ男',kana:'ケズリタ ガツオ',given:'ガツ男',givenKana:'ガツオ'},       // 削りに行くタイプ
+    {name:'鉄壁 守',kana:'テッペキ マモル',given:'守',givenKana:'マモル'},           // そのまんま
+    {name:'反則 しない',kana:'ハンソク シナイ',given:'しない',givenKana:'シナイ'},       // 本人談
+    {name:'螺子巻 走',kana:'ネジマキ ハシル',given:'走',givenKana:'ハシル'},         // 背中のゼンマイで90分走る
+    {name:'杉田 パス之助',kana:'スギタ パスノスケ',given:'パス之助',givenKana:'パスノスケ'},   // パスが少し長すぎる
+    {name:'角 蹴太郎',kana:'スミ ケタロウ',given:'蹴太郎',givenKana:'ケタロウ'},           // コーナーキック職人
+    {name:'決定 力也',kana:'ケッテイ リキヤ',given:'力也',givenKana:'リキヤ'}          // 決定力の化身（自称）
+  ]};
+// CPUチームはCPUの強さで入れ替わる
+const CPU_TEAMS={
+  easy:{name:'ソフビUTD',desc:'ソフビ製',text:'やわらかボディで当たりもソフト。のびのびプレーするので、まずはここから。',style:'vinyl',css:'#ec5444',shirt:0xe6483b,shorts:0x23264a,sock:0xe6483b,gk:0x2bb06a,trim:0xffffff,fan2:0xffffff,
+    glove:0x2bd0a0,crest:0xffffff,num:'#ffffff',metal:0,rough:.44,cc:.35,shortsMetal:0,trimMetal:0,crestMetal:0,roster:[
+      kata('ナンデモ・トメール'),        // 守護神
+      kata('カギ・カケローニ'),          // カテナチオ（閂）の申し子
+      kata('ズザー・スライディーニョ'),  // 芝の上を滑りがち
+      kata('トラッペ・オフサイドフ'),    // ラインを上げるのが趣味
+      kata('マタ・ヌケータ'),            // 股抜きの名手
+      kata('パスーロ・マワスート'),      // ボールを回したがる
+      kata('ハシリ・ツヅケンスキー'),    // スタミナ無尽蔵
+      kata('ハット・トリッキー')         // 1試合3点が目標
+    ]},
+  normal:{name:'ツミキ・シティ',desc:'木製',text:'きっちり組み立てるバランス型。崩れにくい守備をどう崩すかが勝負。',style:'wood',css:'#e8862a',shirt:0xee8a2a,shorts:0xd9b382,sock:0xee8a2a,gk:0x8a5cd0,trim:0xf3dcae,fan2:0xd9b382,
+    glove:0xf3dcae,crest:0xa06a3a,num:'#fff6e4',metal:0,rough:.78,cc:.06,shortsMetal:0,trimMetal:0,crestMetal:0,roster:[
+      kata('マモル・キーパーソン'),      // 職業がそのまま名前に
+      kata('カタイ・ブロックス'),        // 守備もカチカチ
+      kata('ガッチリ・ハメルトン'),      // 隙間なく組み合う
+      kata('クズサン・ストーン'),        // 何を積まれても崩れない
+      kata('カドッコ・スミス'),          // 角っこ（コーナー）担当
+      kata('ツンデ・クズシー'),          // 積んでは崩す司令塔
+      kata('モクメ・ウッズ'),            // 木目の美しいウイング
+      kata('ツミアゲ・ハイタワー')       // ゴールを積み上げる
+    ]},
+  hard:{name:'超合金ディナモ',desc:'超合金製',text:'重くて硬くて速い、最強の超合金軍団。一瞬のスキも見逃さない。',style:'metal',css:'#4b5060',shirt:0x2a2d36,shorts:0xc3c7d0,sock:0x2a2d36,gk:0x3fc6d8,trim:0xe2b13c,fan2:0xe2b13c,
+    glove:0xe2b13c,crest:0xe2b13c,num:'#e2b13c',metal:.85,rough:.25,cc:.8,shortsMetal:.9,trimMetal:.9,crestMetal:.9,roster:[
+      kata('テツノ・カベーノフ'),        // 鉄の壁
+      kata('ゼッタイ・トオサンスキー'),  // 絶対に通さん
+      kata('ガシーン・ボルトフ'),        // ボルトで固定されている
+      kata('オモタ・ジュウリョーフ'),    // 当たり負けしない重量級
+      kata('ギア・マワーリン'),          // 中盤の歯車
+      kata('ガッタイ・セヨビッチ'),      // 合体すると強くなる（らしい）
+      kata('ロケット・パンチェンコ'),    // 腕が飛ぶとの噂
+      kata('ヒッサツ・シュートフ')       // 必殺シュートの使い手
+    ]}
+};
+// 強さの表示（★の数）
+const LEVELS={easy:{label:'かんたん',n:1},normal:{label:'ふつう',n:2},hard:{label:'むずかしい',n:3}};
+// 対戦相手＝CPUの強さ（前回の選択を復元）
+let cpuLevel='normal'; try{ const v=localStorage.getItem('toy8-cpu'); if(CPU_TEAMS[v]) cpuLevel=v; }catch(e){}
+let diff=DIFF[cpuLevel];
+const TEAMS=[BRIKI,CPU_TEAMS[cpuLevel]];
 
 // ---------- quality ----------
 // 画質は軽量で固定（ポストエフェクト・高解像度シャドウなし）
@@ -603,7 +690,7 @@ const boardCanvas=document.createElement('canvas'); boardCanvas.width=1024; boar
 const boardTex=new THREE.CanvasTexture(boardCanvas); boardTex.encoding=THREE.sRGBEncoding; boardTex.wrapS=THREE.RepeatWrapping;
 function drawBoards(){
   const g=boardCanvas.getContext('2d');
-  const segs=[['#14235a','#ffd23f','トイ・エイト'],['#f3efe2','#e6483b','ソフビUTD'],['#e6483b','#fff','8人制リーグ'],['#2f66d6','#fff','ブリキFC']];
+  const T1=TEAMS[1], segs=[['#14235a','#ffd23f','トイ・エイト'],['#f3efe2',T1.css,T1.name],[T1.css,'#fff','8人制リーグ'],['#2f66d6','#fff','ブリキFC']];
   segs.forEach(([bg,fg,t],i)=>{g.fillStyle=bg;g.fillRect(i*256,0,256,64);g.fillStyle=fg;g.font="34px 'Dela Gothic One', sans-serif";g.textAlign='center';g.textBaseline='middle';g.fillText(t,i*256+128,34);});
   g.fillStyle='rgba(0,0,0,.18)'; for(let x=0;x<1024;x+=4) g.fillRect(x,0,1,64); for(let y=0;y<64;y+=4) g.fillRect(0,y,1024,1);
   boardTex.needsUpdate=true;
@@ -642,14 +729,16 @@ function stand(o){
   g.updateMatrixWorld(true);
   return {g,H,D};
 }
-const HOME=[0x2f66d6,0x2f66d6,0xf1e4c3,0x1f3f8f], AWAY=[0xe6483b,0xe6483b,0xffffff,0x23264a], MIX=[0x2f66d6,0xe6483b,0xf3efe2,0xffd23f,0x2f66d6,0xe6483b,0x2bb06a,0x8f6bd1];
+const HOME=[0x2f66d6,0x2f66d6,0xf1e4c3,0x1f3f8f], AWAY=['a0','a0','a2','a3'], MIX=[0x2f66d6,'a0',0xf3efe2,0xffd23f,0x2f66d6,'a0',0x2bb06a,0x8f6bd1];
+// CPU側サポーターの色（a0〜a3 → CPUチームの配色）
+const fanCol=f=>{ if(typeof f!=='string') return f; const T1=TEAMS[1]; return [T1.shirt,T1.shirt,T1.fan2,T1.shorts][+f[1]]; };
 const pick=a=>a[(Math.random()*a.length)|0];
 const mainStand=stand({len:HL*2+10,rows:10,step:1,rise:.62,base:1.1,cx:0,cz:-(HW+4.4),ry:0,fan:(x,k)=>{
   if(x<-HL+6) return ((k+Math.floor(x/1.5))&1)?0x2f66d6:0xf1e4c3;
-  if(x>HL-6) return ((k+Math.floor(x/1.5))&1)?0xe6483b:0xffffff;
+  if(x>HL-6) return ((k+Math.floor(x/1.5))&1)?'a0':'a2';
   return pick(MIX);}});
 stand({len:HL*2+10,rows:4,step:1,rise:.55,base:1.1,cx:0,cz:HW+4.4,ry:Math.PI,fan:()=>pick(MIX)});
-stand({len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:HL+5.2,cz:0,ry:-Math.PI/2,fan:(x,k)=>k%3===2?0xffffff:pick(AWAY)});
+stand({len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:HL+5.2,cz:0,ry:-Math.PI/2,fan:(x,k)=>k%3===2?'a2':pick(AWAY)});
 stand({len:HW*2+6,rows:7,step:1.1,rise:.6,base:1.1,cx:-(HL+5.2),cz:0,ry:Math.PI/2,fan:(x,k)=>k%3===2?0xf1e4c3:pick(HOME)});
 
 // main stand roof with lit fascia
@@ -686,7 +775,7 @@ const dummy=new THREE.Object3D(), wp=new THREE.Vector3();
 seats.forEach((s,i)=>{ s.g.localToWorld(wp.set(s.lx,s.ly,s.lz)); s.x=wp.x; s.y=wp.y; s.z=wp.z;
   dummy.position.set(s.x,s.y+.16,s.z); dummy.rotation.set(0,s.ry,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); seatMesh.setMatrixAt(i,dummy.matrix); seatMesh.setColorAt(i,seatCol[i&1]); });
 for(let i=seats.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [seats[i],seats[j]]=[seats[j],seats[i]]; }
-for(let i=0;i<crowdN;i++){ crowdPhase[i]=Math.random()*6.28; crowdBody.setColorAt(i,col(seats[i].fan)); crowdHead.setColorAt(i,skinCols[(Math.random()*skinCols.length)|0]); seats[i].sc=rnd(.88,1.1); }
+for(let i=0;i<crowdN;i++){ crowdPhase[i]=Math.random()*6.28; crowdBody.setColorAt(i,col(fanCol(seats[i].fan))); crowdHead.setColorAt(i,skinCols[(Math.random()*skinCols.length)|0]); seats[i].sc=rnd(.88,1.1); }
 seatMesh.receiveShadow=true; crowdBody.receiveShadow=true;
 function placeCrowd(jump,t=0){
   for(let i=0;i<crowdN;i++){
@@ -698,12 +787,14 @@ function placeCrowd(jump,t=0){
   crowdBody.instanceMatrix.needsUpdate=crowdHead.instanceMatrix.needsUpdate=true;
 }
 placeCrowd(0); scene.add(seatMesh,crowdBody,crowdHead);
+function recolorCrowd(){ for(let i=0;i<crowdN;i++) if(typeof seats[i].fan==='string') crowdBody.setColorAt(i,col(fanCol(seats[i].fan))); crowdBody.instanceColor.needsUpdate=true; }
 
 // dugouts on the far touchline
+let cpuBenchMat=null;  // CPU側ベンチの色（チーム変更時に塗り直す）
 (function(){
   const glass=new THREE.MeshStandardMaterial({color:col(0xcfe6ff),roughness:.08,metalness:.1,transparent:true,opacity:.32});
   const frame=new THREE.MeshStandardMaterial({color:col(0xe9e9e6),roughness:.35,metalness:.6});
-  [[-7,0x2f66d6],[7,0xe6483b]].forEach(([x,c])=>{
+  [[-7,0x2f66d6],[7,TEAMS[1].shirt]].forEach(([x,c],k)=>{
     const g=new THREE.Group(); g.position.set(x,0,-(HW+3.35)); scene.add(g);
     const base=new THREE.Mesh(new THREE.BoxGeometry(6,.12,1.7),frame); base.position.y=.06; g.add(base);
     const back=new THREE.Mesh(new THREE.BoxGeometry(6,1.7,.06),glass); back.position.set(0,.95,-.8); g.add(back);
@@ -711,6 +802,7 @@ placeCrowd(0); scene.add(seatMesh,crowdBody,crowdHead);
     for(const s of [-1,1]){ const side=new THREE.Mesh(new THREE.BoxGeometry(.06,1.7,1.7),glass); side.position.set(s*3,.95,0); g.add(side); }
     const bench=new THREE.Mesh(new THREE.BoxGeometry(5.6,.42,.5),new THREE.MeshPhysicalMaterial({color:col(c),roughness:.3,clearcoat:1})); bench.position.set(0,.33,-.45); bench.castShadow=true; g.add(bench);
     const benchBack=new THREE.Mesh(new THREE.BoxGeometry(5.6,.5,.1),bench.material); benchBack.position.set(0,.75,-.68); g.add(benchBack);
+    if(k===1) cpuBenchMat=bench.material;
   });
 })();
 
@@ -720,9 +812,9 @@ const sbTex=new THREE.CanvasTexture(sbCanvas); sbTex.encoding=THREE.sRGBEncoding
 function drawScoreboard(){
   const g=sbCanvas.getContext('2d');
   g.fillStyle='#070b14'; g.fillRect(0,0,512,200);
-  g.fillStyle='#2f66d6'; g.fillRect(14,14,232,46); g.fillStyle='#e6483b'; g.fillRect(266,14,232,46);
+  g.fillStyle='#2f66d6'; g.fillRect(14,14,232,46); g.fillStyle=TEAMS[1].css; g.fillRect(266,14,232,46);
   g.fillStyle='#fff'; g.font="28px 'Dela Gothic One', sans-serif"; g.textAlign='center'; g.textBaseline='middle';
-  g.fillText('ブリキFC',130,39); g.fillText('ソフビUTD',382,39);
+  g.fillText('ブリキFC',130,39); g.fillText(TEAMS[1].name,382,39);
   g.fillStyle='#ffd23f'; g.font="bold 92px 'Chakra Petch', 'Arial Black', sans-serif";
   g.fillText(score[0]+' - '+score[1],256,122);
   g.fillStyle='#9fd0ff'; g.font="bold 26px 'Chakra Petch', monospace"; g.fillText(clockText(),256,182);
@@ -864,70 +956,93 @@ let wall=null;
 let myForm='331'; try{ const f=localStorage.getItem('toy8-form'); if(FORMATIONS[f]) myForm=f; }catch(e){}
 const FORM=FORMATIONS['331'].slots;
 const players=[];
-TEAMS.forEach((T0,t)=>{
-  const tin=t===0;
+// チームごとのユニフォーム素材（作り直す時に破棄できるよう保持）
+const teamMats=[];
+function makeTeamMats(T0){
   const mk=(c,extra={})=>new THREE.MeshPhysicalMaterial(Object.assign({color:col(c),metalness:T0.metal,roughness:T0.rough,clearcoat:T0.cc,clearcoatRoughness:.1},extra));
-  const shirt=mk(T0.shirt), gk=mk(T0.gk), shorts=mk(T0.shorts,{metalness:tin?.35:0}), sock=mk(T0.sock), trim=mk(tin?0xf1e4c3:0xffffff,{metalness:tin?.45:0});
-  const gloveMat=new THREE.MeshPhysicalMaterial({color:col(tin?0xf3efe2:0x2bd0a0),roughness:.35,clearcoat:.8});
-  const crestMat=new THREE.MeshStandardMaterial({color:col(tin?0xffd23f:0xffffff),metalness:tin?.8:0,roughness:.3,polygonOffset:true,polygonOffsetFactor:-2});
+  return {shirt:mk(T0.shirt), gk:mk(T0.gk), shorts:mk(T0.shorts,{metalness:T0.shortsMetal}), sock:mk(T0.sock), trim:mk(T0.trim,{metalness:T0.trimMetal}),
+    glove:new THREE.MeshPhysicalMaterial({color:col(T0.glove),roughness:.35,clearcoat:.8}),
+    crest:new THREE.MeshStandardMaterial({color:col(T0.crest),metalness:T0.crestMetal,roughness:.3,polygonOffset:true,polygonOffsetFactor:-2}),
+    seam:new THREE.MeshStandardMaterial({color:col(0xffffff),transparent:true,opacity:.25,roughness:.5})};
+}
+// チームtのi番目の選手モデルを作る（f: {r:ポジション, n:背番号}）
+function buildModel(t,i,f){
+  const T0=TEAMS[t], M=teamMats[t], st=T0.style;
+  const root=new THREE.Group(), body=new THREE.Group(); root.add(body); root.scale.setScalar(1.15);
+  const top=f.r==='GK'?M.gk:M.shirt;
+  const add=(geo,mat,x,y,z,parent=body,shadow=false)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=shadow;parent.add(m);return m;};
+  const skin=skinMats[(i*3+t*2)%5];
+  const boot=bootMats[(i*2+t)%5];
+  const mkLeg=x=>{const hip=new THREE.Group();hip.position.set(x,.6,0);body.add(hip);
+    add(G.thigh,skin,0,-.08,0,hip,true); add(G.sock,M.sock,0,-.31,0,hip,true);
+    const tr=add(G.trim,M.trim,0,-.17,0,hip); tr.rotation.x=Math.PI/2;
+    const b=add(G.boot,boot,0,-.5,.05,hip,true); b.scale.set(1,.7,1.5); return hip;};
+  const hipL=mkLeg(.15), hipR=mkLeg(-.15);
+  add(G.shorts,M.shorts,0,.5,0,body,true);
+  add(G.torso,top,0,.72,0,body,true);
+  const col0=add(G.collar,M.trim,0,1.38,0); col0.rotation.x=Math.PI/2;
+  if(f.r!=='GK'){
+    if(st==='vinyl'){ const s=add(G.sash,M.trim,0,1.06,0); s.rotation.z=.5; }
+    else if(st==='wood'){ for(const y of [.9,1.14]) add(G.band,M.trim,0,y,0).scale.y=.5; }  // 積み木っぽいしま
+    else add(G.band,M.trim,0,1.02,0);
+  }
+  const mkArm=x=>{const sh=new THREE.Group();sh.position.set(x,1.3,0);sh.rotation.z=x>0?-.18:.18;body.add(sh);
+    add(G.arm,top,0,-.18,0,sh,true); const cf=add(G.cuff,M.trim,0,-.34,0,sh); cf.rotation.x=Math.PI/2;
+    if(f.r==='GK') add(G.glove,M.glove,0,-.44,0,sh,true); else add(G.hand,skin,0,-.42,0,sh); return sh;};
+  const armL=mkArm(.38), armR=mkArm(-.38);
+  add(G.neck,skin,0,1.48,0);
+  const HY=1.84;
+  add(G.head,skin,0,HY,0,body,true);
+  add(G.ear,skin,.3,HY-.02,0); add(G.ear,skin,-.3,HY-.02,0);
+  for(const s of [1,-1]){
+    add(G.eye,eyeMat,s*.11,HY+.03,.275); add(G.shine,whiteMat,s*.11+.016,HY+.05,.318);
+    const br=add(G.brow,browMat,s*.11,HY+.115,.282); br.rotation.z=s*.12;
+    const ck=add(G.cheek,cheekMat,s*.19,HY-.06,.248); ck.rotation.y=s*.62;
+  }
+  const mo=add(G.mouth,mouthMat,0,HY-.08,.29); mo.rotation.z=Math.PI;
+  const hm=hairMats[(i*2+t)%5], style=(i*3+t)%5;
+  const hair=add(G.hair,hm,0,HY+.02,-.02,body,true); hair.rotation.x=-.32;
+  if(style===1){ for(let k=0;k<6;k++){ const a=k/6*Math.PI*2; const sp=add(G.spike,hm,Math.cos(a)*.15,HY+.3,Math.sin(a)*.15-.03); sp.rotation.set(Math.sin(a)*.5,0,-Math.cos(a)*.5);} add(G.spike,hm,0,HY+.36,0); }
+  else if(style===2){ hair.scale.set(1,.7,1); }
+  else if(style===3){ const p=add(G.puff,hm,0,HY+.24,.17); p.scale.set(1.3,.9,1); }
+  else if(style===4){ add(G.puff,hm,0,HY+.22,-.25); }
+  if(st==='vinyl'){ const sm=add(G.headSeam,M.seam,0,HY,0); sm.rotation.y=Math.PI/2; }
+  if(st==='metal'){ for(const s of [1,-1]){ const v=add(G.spike,goldMat,s*.09,HY+.3,.2,body,true); v.scale.set(.6,1.2,.6); v.rotation.set(-.3,0,-s*.7); } }  // 額のV字アンテナ
+  const nm=new THREE.Mesh(G.num,numberMat(f.n,T0.num)); nm.position.set(0,1.06,-.368); nm.rotation.y=Math.PI; body.add(nm);
+  const nf=new THREE.Mesh(G.numF,numberMat(f.n,T0.num)); nf.position.set(.13,1.22,.352); body.add(nf);
+  add(G.crest,M.crest,-.13,1.22,.352);
+  let key=null;
+  if(st==='tin'||st==='metal'){ for(const s of [1,-1]) for(const zz of [.1,-.1]) add(G.rivet,goldMat,s*.31,1.33,zz); }
+  if(st==='tin'){
+    for(const s of [1,-1]) add(G.seamBar,M.trim,s*.362,1.02,0);
+    key=new THREE.Group(); key.position.set(0,1.12,-.37); body.add(key);
+    const sh=add(G.keyShaft,goldMat,0,0,-.1,key); sh.rotation.x=Math.PI/2;
+    for(const s of [1,-1]){ const l=add(G.keyLobe,goldMat,s*.085,0,-.23,key,true); l.rotation.y=Math.PI/2; }
+  }
+  scene.add(root);
+  return {numMeshes:[nm,nf],numColor:T0.num,root,body,hipL,hipR,armL,armR,key};
+}
+TEAMS.forEach((T0,t)=>{
+  teamMats[t]=makeTeamMats(T0);
   FORM.forEach((f,i)=>{
-    const root=new THREE.Group(), body=new THREE.Group(); root.add(body); root.scale.setScalar(1.15);
-    const top=f.r==='GK'?gk:shirt;
-    const add=(geo,mat,x,y,z,parent=body,shadow=false)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=shadow;parent.add(m);return m;};
-    const skin=skinMats[(i*3+t*2)%5];
-    const boot=bootMats[(i*2+t)%5];
-    const mkLeg=x=>{const hip=new THREE.Group();hip.position.set(x,.6,0);body.add(hip);
-      add(G.thigh,skin,0,-.08,0,hip,true); add(G.sock,sock,0,-.31,0,hip,true);
-      const tr=add(G.trim,trim,0,-.17,0,hip); tr.rotation.x=Math.PI/2;
-      const b=add(G.boot,boot,0,-.5,.05,hip,true); b.scale.set(1,.7,1.5); return hip;};
-    const hipL=mkLeg(.15), hipR=mkLeg(-.15);
-    add(G.shorts,shorts,0,.5,0,body,true).geometry;
-    add(G.torso,top,0,.72,0,body,true);
-    const col0=add(G.collar,trim,0,1.38,0); col0.rotation.x=Math.PI/2;
-    if(f.r!=='GK'){
-      if(tin){ add(G.band,trim,0,1.02,0); }
-      else { const s=add(G.sash,trim,0,1.06,0); s.rotation.z=.5; }
-    }
-    const mkArm=x=>{const sh=new THREE.Group();sh.position.set(x,1.3,0);sh.rotation.z=x>0?-.18:.18;body.add(sh);
-      add(G.arm,top,0,-.18,0,sh,true); const cf=add(G.cuff,trim,0,-.34,0,sh); cf.rotation.x=Math.PI/2;
-      if(f.r==='GK') add(G.glove,gloveMat,0,-.44,0,sh,true); else add(G.hand,skin,0,-.42,0,sh); return sh;};
-    const armL=mkArm(.38), armR=mkArm(-.38);
-    add(G.neck,skin,0,1.48,0);
-    const HY=1.84;
-    add(G.head,skin,0,HY,0,body,true);
-    add(G.ear,skin,.3,HY-.02,0); add(G.ear,skin,-.3,HY-.02,0);
-    for(const s of [1,-1]){
-      add(G.eye,eyeMat,s*.11,HY+.03,.275); add(G.shine,whiteMat,s*.11+.016,HY+.05,.318);
-      const br=add(G.brow,browMat,s*.11,HY+.115,.282); br.rotation.z=s*.12;
-      const ck=add(G.cheek,cheekMat,s*.19,HY-.06,.248); ck.rotation.y=s*.62;
-    }
-    const mo=add(G.mouth,mouthMat,0,HY-.08,.29); mo.rotation.z=Math.PI;
-    const hm=hairMats[(i*2+t)%5], style=(i*3+t)%5;
-    const hair=add(G.hair,hm,0,HY+.02,-.02,body,true); hair.rotation.x=-.32;
-    if(style===1){ for(let k=0;k<6;k++){ const a=k/6*Math.PI*2; const sp=add(G.spike,hm,Math.cos(a)*.15,HY+.3,Math.sin(a)*.15-.03); sp.rotation.set(Math.sin(a)*.5,0,-Math.cos(a)*.5);} add(G.spike,hm,0,HY+.36,0); }
-    else if(style===2){ hair.scale.set(1,.7,1); }
-    else if(style===3){ const p=add(G.puff,hm,0,HY+.24,.17); p.scale.set(1.3,.9,1); }
-    else if(style===4){ add(G.puff,hm,0,HY+.22,-.25); }
-    if(!tin){ const sm=add(G.headSeam,new THREE.MeshStandardMaterial({color:col(0xffffff),transparent:true,opacity:.25,roughness:.5}),0,HY,0); sm.rotation.y=Math.PI/2; }
-    const nm=new THREE.Mesh(G.num,numberMat(f.n,tin?'#f3efe2':'#ffffff')); nm.position.set(0,1.06,-.368); nm.rotation.y=Math.PI; body.add(nm);
-    const nf=new THREE.Mesh(G.numF,numberMat(f.n,tin?'#f3efe2':'#ffffff')); nf.position.set(.13,1.22,.352); body.add(nf);
-    const numMeshes=[nm,nf], numColor=tin?'#f3efe2':'#ffffff';
-    add(G.crest,crestMat,-.13,1.22,.352);
-    let key=null;
-    if(tin){
-      for(const s of [1,-1]){ for(const zz of [.1,-.1]) add(G.rivet,goldMat,s*.31,1.33,zz); add(G.seamBar,trim,s*.362,1.02,0); }
-      key=new THREE.Group(); key.position.set(0,1.12,-.37); body.add(key);
-      const sh=add(G.keyShaft,goldMat,0,0,-.1,key); sh.rotation.x=Math.PI/2;
-      for(const s of [1,-1]){ const l=add(G.keyLobe,goldMat,s*.085,0,-.23,key,true); l.rotation.y=Math.PI/2; }
-    }
-    scene.add(root);
     const blob=new THREE.Mesh(blobGeo,blobMat); blob.renderOrder=1; scene.add(blob);
-    players.push({team:t,role:f.r,num:f.n,base:{x:f.x,z:f.z},wing:false,numMeshes,numColor,root,body,hipL,hipR,armL,armR,key,blob,
+    players.push({team:t,role:f.r,num:f.n,...T0.roster[i],base:{x:f.x,z:f.z},wing:false,...buildModel(t,i,f),blob,
       pos:new THREE.Vector3(),vel:new THREE.Vector3(),face:0,phase:Math.random()*6,seed:Math.random()*10,
       pickupCD:0,tackleT:0,tackleCD:0,stunT:0,kickAnim:0,locked:false,aiT:0,holdT:0,diveT:0,diveDir:0,receiveT:0,rolled:-1,yOff:0,
       fooledT:0,foolLean:0,evadeT:0,spinT:0,spinDir:1,boostT:0,skillN:0,pkHold:0});
   });
 });
+// CPUチームの選手を作り直す（見た目・名簿を差し替え。位置や状態はそのまま）
+function rebuildCpuPlayers(){
+  Object.values(teamMats[1]).forEach(m=>m.dispose());
+  teamMats[1]=makeTeamMats(TEAMS[1]);
+  players.filter(p=>p.team===1).forEach((p,i)=>{
+    const old=p.root;
+    scene.remove(old); p.numMeshes.forEach(m=>{ m.material.map.dispose(); m.material.dispose(); });
+    Object.assign(p,TEAMS[1].roster[i],buildModel(1,i,{r:p.role,n:p.num}));
+    p.root.position.copy(old.position); p.root.rotation.copy(old.rotation);
+  });
+}
 // ラッシュタイム中の選手の足元に光るリング
 { const rg=new THREE.RingGeometry(.78,.92,32), rm=[new THREE.MeshBasicMaterial({color:new THREE.Color(.8,1.4,2.6),transparent:true,opacity:.8,depthWrite:false}),new THREE.MeshBasicMaterial({color:new THREE.Color(2.6,1,.8),transparent:true,opacity:.8,depthWrite:false})];
   players.forEach(p=>{ p.rushRing=new THREE.Mesh(rg,rm[p.team]); p.rushRing.rotation.x=-Math.PI/2; p.rushRing.visible=false; scene.add(p.rushRing); }); }
@@ -998,7 +1113,7 @@ confetti.visible=false; scene.add(confetti);
 const confData=[]; let confT=0;
 for(let i=0;i<CONF;i++) confData.push({p:new THREE.Vector3(),v:new THREE.Vector3(),r:new THREE.Euler(),w:new THREE.Vector3()});
 function burstConfetti(team){
-  const cs=team===0?[0x2f66d6,0xf1e4c3,0xffd23f]:[0xe6483b,0xffffff,0xffd23f];
+  const cs=team===0?[0x2f66d6,0xf1e4c3,0xffd23f]:[TEAMS[1].shirt,TEAMS[1].fan2,0xffd23f];
   const gx=(team===0?1:-1)*HL;
   confData.forEach((c,i)=>{c.p.set(gx+rnd(-3,3)*-Math.sign(gx)*-1,rnd(4,9),rnd(-12,12));c.v.set(rnd(-2,2),rnd(0,3),rnd(-2,2));c.r.set(rnd(0,6),rnd(0,6),rnd(0,6));c.w.set(rnd(-8,8),rnd(-8,8),rnd(-8,8));confetti.setColorAt(i,col(cs[i%3]));});
   confetti.instanceColor.needsUpdate=true; confetti.visible=true; confT=5;
@@ -1600,7 +1715,7 @@ function skillPop(text,p){
   skillPopEl.classList.remove('go'); void skillPopEl.offsetWidth; skillPopEl.classList.add('go');
 }
 addEventListener('keydown',e=>{
-  if(!$('#helpOv').hidden||!$('#formView').hidden){ if(e.code==='Escape') closeTopSheet(); return; }
+  if(!$('#helpOv').hidden||!$('#formView').hidden||!$('#teamView').hidden){ if(e.code==='Escape') closeTopSheet(); return; }
   if(e.code==='KeyP'||e.code==='Escape'){ togglePause(); return; }
   if((state==='replay'||state==='card')&&!paused){ if(!e.repeat) skipCinematic(); return; }
   if(e.code==='KeyM'&&!e.repeat){ radarOn=!radarOn; try{ localStorage.setItem('toy8-radar',radarOn?'1':'0'); }catch(_){} return; }
@@ -2163,6 +2278,14 @@ function updateCamera(dt){
 
 // ---------- visuals ----------
 const proj=new THREE.Vector3(); const meter=$('#meter'), meterFill=$('#meterFill');
+const nameTag=$('#nameTag'), cpuTag=$('#cpuTag');
+// 名札を選手pの頭上（高さy）に置く。lift: 画面上でさらに持ち上げるpx
+function placeTag(el,p,y,lift){
+  el.hidden=!p; if(!p) return;
+  if(el._for!==p){ el._for=p; const k=el.children[0]; k.textContent=p.givenKana; k.hidden=p.givenKana===p.given; el.children[1].textContent=p.given; }  // カタカナ名は読みを省く
+  proj.set(p.pos.x,y,p.pos.z).project(camera);
+  el.style.left=((proj.x+1)/2*innerWidth)+'px'; el.style.top=((1-proj.y)/2*innerHeight-lift)+'px';
+}
 const q0=new THREE.Quaternion(), axis=new THREE.Vector3();
 function updateVisuals(dt){
   const cine=state==='replay'||state==='card';
@@ -2204,8 +2327,11 @@ function updateVisuals(dt){
   const showUI=state!=='menu'&&active;
   activeRing.visible=activeArrow.visible=!!showUI;
   if(showUI){ activeRing.position.set(active.pos.x,.03,active.pos.z); activeArrow.position.set(active.pos.x,2.6+Math.sin(T*6)*.08,active.pos.z); }
+  // 名札：矢印の上に表示（チャージメーター表示中はその分だけ上へ逃がす）
+  placeTag(nameTag,showUI?active:null,2.95,charging?8:4);
   const co=ball.owner&&ball.owner.team===1?ball.owner:null;
   cpuRing.visible=!!co&&state==='play'; if(co) cpuRing.position.set(co.pos.x,.03,co.pos.z);
+  placeTag(cpuTag,cpuRing.visible?co:null,2.6,4); // 敵は矢印が無いので頭のすぐ上
   cursorRing.visible=mouse.on&&mouse.inside&&state!=='menu';
   if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const hot=ball.owner===active&&mousePassTarget(); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
   if(passing&&ball.owner===active){ passHold+=dt;
@@ -2301,7 +2427,7 @@ function startReplay(){
   $('#rpScorer').textContent=info.label;
   speedEl.classList.remove('pop'); linesEl.classList.remove('on');
   replayUI.hidden=false; requestAnimationFrame(()=>replayUI.classList.add('on'));
-  activeRing.visible=activeArrow.visible=cpuRing.visible=cursorRing.visible=targetRing.visible=false; meter.hidden=true;
+  activeRing.visible=activeArrow.visible=cpuRing.visible=cursorRing.visible=targetRing.visible=false; meter.hidden=nameTag.hidden=cpuTag.hidden=true;
   confetti.visible=false; confT=0;
   if(composer){ tiltH.uniforms.h.value=6/innerWidth; tiltV.uniforms.v.value=6/innerHeight; }
   sfx.whoosh();
@@ -2475,14 +2601,14 @@ function frame(now){
 // ---------- UI wiring ----------
 function showEnd(){
   $('#finalScore').textContent=score[0]+' - '+score[1];
-  $('#resultText').textContent=score[0]>score[1]?'ブリキFCの勝ち！':score[0]<score[1]?'ソフビUTDの勝ち':'引き分け';
+  $('#resultText').textContent=score[0]>score[1]?'ブリキFCの勝ち！':score[0]<score[1]?TEAMS[1].name+'の勝ち':'引き分け';
   const sl=$('#styleLine'); sl.hidden=!stylePts; if(stylePts) sl.textContent='スタイルポイント '+stylePts.toLocaleString()+'　最高ランク '+bestRank;
   $('#endOv').hidden=false;
 }
 function startGame(){
   initAudio(); $('#menu').hidden=true; $('#endOv').hidden=true; $('#pauseOv').hidden=true; paused=false;
   prepareCpuFormation();
-  resetMatch(); banner('キックオフ','ソフビUTD は '+FORMATIONS[teamForm[1]].name,1600);
+  resetMatch(); banner('キックオフ',TEAMS[1].name+' は '+FORMATIONS[teamForm[1]].name,1600);
 }
 function toMenu(){ if(RP||CARD){ RP=null; CARD=null; replayUI.classList.remove('on'); replayUI.hidden=true; $('#goalCard').hidden=true; trail.forEach(m=>m.visible=false); sizeComposer(); } state='menu'; paused=false; $('#pauseOv').hidden=true; $('#endOv').hidden=true; $('#menu').hidden=false; $('#formView').hidden=true; $('#menuMain').hidden=false; resetPositions(); ball.owner=null; ball.pos.set(0,BR,0); ball.vel.set(0,0,0); active=null; }
 function togglePause(){
@@ -2496,9 +2622,24 @@ $('#menuBtn').addEventListener('click',toMenu);
 $('#quitBtn').addEventListener('click',toMenu);
 $('#resumeBtn').addEventListener('click',togglePause);
 $('#pauseBtn').addEventListener('click',togglePause);
-document.querySelectorAll('#diffSeg button').forEach(b=>b.addEventListener('click',()=>{
-  diff=DIFF[b.dataset.d]; document.querySelectorAll('#diffSeg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-}));
+// 対戦相手（＝CPUの強さ）を切り替え、選手を作り直して表示を更新
+function setCpuTeam(d){
+  if(cpuLevel===d) return;
+  cpuLevel=d; diff=DIFF[d]; TEAMS[1]=CPU_TEAMS[d];
+  try{ localStorage.setItem('toy8-cpu',d); }catch(e){}
+  rebuildCpuPlayers(); syncCpuUI();
+}
+// CPUチームに合わせてUI・スタジアムの色や名前を更新
+function syncCpuUI(){
+  const T1=TEAMS[1];
+  document.documentElement.style.setProperty('--t1',T1.css);
+  document.querySelectorAll('.tn1').forEach(e=>e.textContent=T1.name);
+  $('#cpuDesc').textContent='CPU・'+LEVELS[cpuLevel].label;
+  const hex=c=>'#'+c.toString(16).padStart(6,'0');
+  RC.t1=T1.css; RC.t1e=hex(T1.shorts); RC.gk1=hex(T1.gk);
+  cpuBenchMat.color.copy(col(T1.shirt));
+  recolorCrowd(); drawBoards(); drawScoreboard();
+}
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&!paused&&state!=='menu'&&state!=='end') togglePause(); });
 addEventListener('resize',()=>{ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); sizeComposer(); });
 function selectFormation(k){
@@ -2599,6 +2740,33 @@ function closeFormView(commit){
   if(commit) (fvTeam?selectCpuFormation:selectFormation)(fvSel);
   $('#formView').hidden=true; $('#menuMain').hidden=false; $('#fPick'+fvTeam).focus();
 }
+// 対戦相手（チームと強さ）選択画面
+let tvSel='normal';
+const pipsHTML=(n,max)=>`<span class="pips">${Array.from({length:max},(_,j)=>`<i class="${j<n?'on':''}"></i>`).join('')}</span>`;
+function renderTeamView(){
+  $('#tvList').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.d===tvSel)));
+  const T=CPU_TEAMS[tvSel];
+  $('#tvText').textContent=T.text;
+  $('#tvRoster').innerHTML=T.roster.map(r=>`<span>${r.name}</span>`).join('');
+}
+function openTeamView(){
+  tvSel=cpuLevel;
+  $('#tvList').innerHTML=Object.entries(CPU_TEAMS).map(([d,T])=>{ const L=LEVELS[d];
+    return `<button class="topt" data-d="${d}" aria-pressed="false" aria-label="${T.name}（${L.label}）"><i style="--c:${T.css}"></i>`
+      +`<span><b>${T.name}</b><small>${T.desc}</small></span><span class="lv">${pipsHTML(L.n,3)}${L.label}</span></button>`; }).join('');
+  $('#tvList').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ tvSel=b.dataset.d; renderTeamView(); }));
+  renderTeamView();
+  $('#menuMain').hidden=true; $('#teamView').hidden=false; $('#menu').scrollTop=0;
+  $('#tvList').querySelector('[aria-pressed="true"]').focus();
+}
+// commit=true で決定、false は戻る（変更を破棄）
+function closeTeamView(commit){
+  if(commit) setCpuTeam(tvSel);
+  $('#teamView').hidden=true; $('#menuMain').hidden=false; $('#tPick').focus();
+}
+$('#tPick').addEventListener('click',openTeamView);
+$('#teamOk').addEventListener('click',()=>closeTeamView(true));
+$('#teamBack').addEventListener('click',()=>closeTeamView(false));
 $('#fPick0').addEventListener('click',()=>openFormView(0));
 $('#fPick1').addEventListener('click',()=>openFormView(1));
 $('#formOk').addEventListener('click',()=>closeFormView(true));
@@ -2616,10 +2784,12 @@ $('#helpOv').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeH
 function closeTopSheet(){
   if(!$('#helpOv').hidden){ closeHelp(); return true; }
   if(!$('#formView').hidden){ closeFormView(false); return true; }
+  if(!$('#teamView').hidden){ closeTeamView(false); return true; }
   return false;
 }
 selectFormation(myForm);
 selectCpuFormation(cpuChoice);
+syncCpuUI();
 camera.aspect=innerWidth/innerHeight;
 
 resetPositions();
