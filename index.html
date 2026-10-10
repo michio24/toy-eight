@@ -193,6 +193,7 @@ h1 em{font-style:normal;color:var(--gold)}
         <div class="seg" id="fSeg" style="margin-top:8px">
           <button id="f-331" data-f="331" aria-pressed="true">3-3-1</button>
           <button id="f-241" data-f="241" aria-pressed="false">2-4-1</button>
+          <button id="f-322" data-f="322" aria-pressed="false">3-2-2</button>
         </div>
         <div class="label" id="fHint" style="margin-top:6px;font-weight:500"></div>
       </div>
@@ -201,6 +202,7 @@ h1 em{font-style:normal;color:var(--gold)}
         <div class="seg" id="cfSeg" style="margin-top:8px">
           <button id="cf-331" data-f="331" aria-pressed="true">3-3-1</button>
           <button id="cf-241" data-f="241" aria-pressed="false">2-4-1</button>
+          <button id="cf-322" data-f="322" aria-pressed="false">3-2-2</button>
           <button id="cf-auto" data-f="auto" aria-pressed="false">おまかせ</button>
         </div>
         <div class="label" id="cfHint" style="margin-top:6px;font-weight:500"></div>
@@ -700,13 +702,19 @@ function numberMat(n,fg){
   return new THREE.MeshStandardMaterial({map:t,transparent:true,roughness:.4,polygonOffset:true,polygonOffsetFactor:-2});
 }
 const FORMATIONS={
-  '331':{name:'3-3-1',hold:'長押し：フライパス（浮き球）',slots:[
+  // holdPlan: 長押し中のプレビュー兼ねた計画 {q,tx,tz}／holdKick: 離した時の実行
+  '331':{name:'3-3-1',hold:'長押し：ワンツー（壁パスで抜け出す）',holdPlan:()=>wallPlanUser(),holdKick:(p,pl)=>wallPass(p,pl.q,pl.tx,pl.tz),slots:[
     {r:'GK',x:-27.6,z:0,n:1},{r:'DF',x:-19,z:-10,n:2},{r:'DF',x:-20.5,z:0,n:4},{r:'DF',x:-19,z:10,n:3},
     {r:'MF',x:-10,z:-12,n:7},{r:'MF',x:-11,z:0,n:8},{r:'MF',x:-10,z:12,n:11},{r:'FW',x:-3,z:0,n:9}]},
-  '241':{name:'2-4-1',hold:'長押し：両ウイングへ裏パス',slots:[
+  '241':{name:'2-4-1',hold:'長押し：両ウイングへ裏パス',holdPlan:()=>wingThroughPlan(),holdKick:(p,pl)=>throughPass(p,pl),slots:[
     {r:'GK',x:-27.6,z:0,n:1},{r:'DF',x:-20,z:-6,n:2},{r:'MF',x:-13,z:-4,n:6},{r:'DF',x:-20,z:6,n:3},
-    {r:'MF',x:-8,z:-14.5,n:7,wing:true},{r:'MF',x:-13,z:4,n:8},{r:'MF',x:-8,z:14.5,n:11,wing:true},{r:'FW',x:-2.5,z:0,n:9}]}
+    {r:'MF',x:-8,z:-14.5,n:7,wing:true},{r:'MF',x:-13,z:4,n:8},{r:'MF',x:-8,z:14.5,n:11,wing:true},{r:'FW',x:-2.5,z:0,n:9}]},
+  '322':{name:'3-2-2',hold:'長押し：2トップへロングフィード（浮き球）',holdPlan:()=>feedPlanUser(),holdKick:(p,pl)=>longFeed(p,pl),slots:[
+    {r:'GK',x:-27.6,z:0,n:1},{r:'DF',x:-19,z:-10,n:2},{r:'DF',x:-20.5,z:0,n:4},{r:'DF',x:-19,z:10,n:3},
+    {r:'MF',x:-11,z:-5,n:6},{r:'MF',x:-11,z:5,n:8},{r:'FW',x:-3,z:-5,n:9},{r:'FW',x:-3,z:5,n:10}]}
 };
+// 進行中のワンツー {from,to,tx,tz,until}
+let wall=null;
 let myForm='331'; try{ const f=localStorage.getItem('toy8-form'); if(FORMATIONS[f]) myForm=f; }catch(e){}
 const FORM=FORMATIONS['331'].slots;
 const players=[];
@@ -1056,13 +1064,110 @@ function throughPass(p,plan){
 }
 // 2-4-1: long press sends the ball in behind for a winger; stick/cursor picks the side
 function wingThroughPlan(){
-  const i=inputVec(); const extra=clamp((passHold-.22)/.7,0,1)*4;
+  const extra=clamp((passHold-.22)/.7,0,1)*4;
   const aim=mouse.on&&mouse.inside?{x:mouse.x,z:mouse.z}:null;
-  let side=0; if(aim) side=Math.sign(aim.z-active.pos.z)*(Math.abs(aim.z-active.pos.z)>3?1:0); else if(i.m>.2&&Math.abs(i.z)>.3) side=Math.sign(i.z);
+  const side=holdSide();
   const wings=players.filter(q=>q.team===0&&q.wing&&q!==active);
   const pick=side?wings.filter(q=>Math.sign(q.base.z)===side):wings;
   const only=q=>pick.includes(q);
   return throughPlan(active,null,extra,aim,only)||throughPlan(active,null,extra,aim,only,-9)||(side?throughPlan(active,null,extra,aim,q=>wings.includes(q),-9):null);
+}
+// 長押しで選ぶ左右（カーソル or スティック、0 は指定なし）
+function holdSide(){
+  const i=inputVec();
+  if(mouse.on&&mouse.inside) return Math.abs(mouse.z-active.pos.z)>3?Math.sign(mouse.z-active.pos.z):0;
+  return i.m>.2&&Math.abs(i.z)>.3?Math.sign(i.z):0;
+}
+// 3-3-1: ワンツー。壁役へグラウンダー→ダイレクトで出し手の前方スペースへ返す
+function wallSpot(p,dx,dz,L){
+  const n=Math.hypot(dx,dz)||1;
+  return {tx:clamp(p.pos.x+dx/n*L,-HL+2,HL-3),tz:clamp(p.pos.z+dz/n*L,-HW+1.5,HW-1.5)};
+}
+function wallPlanUser(){
+  const d=teamDir(0), L=6+clamp((passHold-.22)/.7,0,1)*6;
+  const okQ=q=>q&&q.role!=='GK'&&dXZ(q.pos,active.pos)<18;
+  let q=null, spot=null;
+  if(mouse.on&&mouse.inside){
+    // カーソルが味方の上なら壁役に、空いた場所なら走り込む先に
+    const mq=mousePassTarget();
+    if(okQ(mq)) q=mq;
+    else if(mouseDist()>4&&(mouse.x-active.pos.x)*d>-2) spot=wallSpot(active,mouse.x-active.pos.x,mouse.z-active.pos.z,Math.min(16,mouseDist()));
+  }
+  if(!q){ const b=bestPassTarget(active,null)||bestPassTarget(active,userDir()); if(okQ(b)) q=b; }
+  if(!q) return null;
+  if(!spot){
+    // スティック入力があればその方向（後ろ向きは不可）、なければゴール方向へ
+    const i=inputVec();
+    spot=(!mouse.on&&i.m>.2&&i.x*d>-.2)?wallSpot(active,i.x,i.z,L):wallSpot(active,d,-active.pos.z*.03,L);
+  }
+  return {q,tx:spot.tx,tz:spot.tz};
+}
+function wallPlanCPU(p){
+  const d=teamDir(p.team);
+  const q=bestPassTarget(p,null); if(!q||q.role==='GK'||dXZ(q.pos,p.pos)>12) return null;
+  const s=wallSpot(p,d,-p.pos.z*.04,rnd(6,9));
+  return {q,tx:s.tx,tz:s.tz};
+}
+function wallPass(p,q,tx,tz){
+  passTo(p,q,false);
+  setActive(p); // 操作は出し手に残す
+  wall={from:p,to:q,tx,tz,until:T+4};
+  p.receiveT=0;
+  if(p.team===0) banner('ワンツー','',700);
+}
+// 壁役がダイレクトで出し手の走り込む先へ返す
+function wallReturn(p){
+  const f=wall.from; wall=null;
+  let tx=f.pos.x, tz=f.pos.z;
+  for(let k=0;k<3;k++){ const dd=Math.hypot(tx-ball.pos.x,tz-ball.pos.z), tl=Math.min(1.5,dd/(throughSpeed(dd)*.75)); tx=f.pos.x+f.vel.x*tl; tz=f.pos.z+f.vel.z*tl; }
+  tx=clamp(tx,-HL+1,HL-1.5); tz=clamp(tz,-HW+1,HW-1);
+  const dx=tx-ball.pos.x, dz=tz-ball.pos.z, dd=Math.hypot(dx,dz)||1;
+  if(dd<2){ passTo(p,f,false); return; }
+  const v=throughSpeed(dd); kick(p,dx/dd,dz/dd,v,.12);
+  ball.passTo=f; f.receiveT=dd/(v*.75)+1.6; f.throughT=T;
+  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  if(p.team===0) setActive(f);
+}
+// 3-2-2: FW の走り込む先へ浮き球。相手より先に落下地点へ着けるかで選ぶ
+function feedPlan(p,side=0,extra=0,aim=null){
+  const d=teamDir(p.team); let best=null;
+  for(const q of players){
+    if(q.team!==p.team||q===p||q.role!=='FW') continue;
+    if(side&&Math.sign(q.pos.z-p.pos.z||q.base.z*d)!==side) continue;
+    let rx=d, rz=-q.pos.z*.03; const rl=Math.hypot(rx,rz); rx/=rl; rz/=rl;
+    for(let L=2;L<=8+extra;L+=1.5){
+      const tx=clamp(q.pos.x+rx*L,-HL+2,HL-3), tz=clamp(q.pos.z+rz*L,-HW+1.5,HW-1.5);
+      const dist=Math.hypot(tx-p.pos.x,tz-p.pos.z);
+      if(dist<9||dist>38) continue;
+      const tBall=loftTime(dist), tRecv=Math.hypot(tx-q.pos.x,tz-q.pos.z)/SPRINT+.1;
+      if(tRecv>tBall+.8) continue;
+      const arrive=Math.max(tRecv,tBall);
+      let margin=9;
+      for(const o of players){ if(o.team===p.team) continue;
+        const os=SPRINT*(o.team===1?diff.spd:1);
+        const oT=Math.max(0,Math.hypot(o.pos.x-tx,o.pos.z-tz)-.8)/os+(o.role==='GK'?.05:.3);
+        margin=Math.min(margin,oT-arrive);
+      }
+      let sc=Math.min(margin,1.2)*2+(tx-p.pos.x)*d*.08;
+      if(aim) sc-=Math.hypot(tx-aim.x,tz-aim.z)*.25;
+      if(!best||sc>best.s) best={q,tx,tz,s:sc,margin,dist};
+    }
+  }
+  return best;
+}
+function feedPlanUser(){
+  const extra=clamp((passHold-.22)/.7,0,1)*6, side=holdSide();
+  const aim=mouse.on&&mouse.inside?{x:mouse.x,z:mouse.z}:null;
+  return feedPlan(active,side,extra,aim)||(side?feedPlan(active,0,extra,aim):null);
+}
+function longFeed(p,plan){
+  const dx=plan.tx-ball.pos.x, dz=plan.tz-ball.pos.z, d=Math.hypot(dx,dz)||1, t=loftTime(d);
+  kick(p,dx/d,dz/d,d*.94/t,4.905*t);
+  const q=plan.q; ball.passTo=q; q.receiveT=t+1.6; q.throughT=T; q.runUntil=T+t+.6;
+  // もう一人の FW もゴール前へ走り込ませて落としを狙う
+  for(const o of players) if(o.team===p.team&&o.role==='FW'&&o!==q&&o!==p) o.runUntil=T+t+1.5;
+  if(chain.team===p.team) chain.passes++; else { chain.team=p.team; chain.passes=1; }
+  if(p.team===0){ setActive(q); banner('ロングフィード','',700); }
 }
 function landTime(){ const h=ball.pos.y-BR, vy=ball.vel.y; if(ball.owner||(h<.05&&vy<1)) return 0; return (vy+Math.sqrt(vy*vy+2*9.81*Math.max(0,h)))/9.81; }
 function ballFuture(t){
@@ -1145,7 +1250,10 @@ function press(b){
 function release(b){
   btn[b]=false;
   if(b==='pass'&&passing){ passing=false; targetRing.visible=false; throughMark.visible=false;
-    if(canAct()&&ball.owner===active){ if(passHold>.22){ if(myForm==='241'){ const pl=wingThroughPlan(); if(pl) throughPass(active,pl); else userPass(false); } else userPass(true); } else userPass(false); } }
+    if(canAct()&&ball.owner===active){
+      // 長押しはフォーメーションごとの特殊パス。成立しなければ通常パス
+      const F=FORMATIONS[myForm], pl=passHold>.22?F.holdPlan():null;
+      if(pl) F.holdKick(active,pl); else userPass(false); } }
   if(b==='shoot'&&charging){ charging=false; $('#meter').hidden=true; if(canAct()&&ball.owner===active) userShoot(Math.max(.15,charge)); }
 }
 function userDir(){ const i=inputVec(); return i.m>.2?{x:i.x,z:i.z}:{x:Math.sin(active.face),z:Math.cos(active.face)}; }
@@ -1363,6 +1471,7 @@ function formTarget(p){
 function fieldAI(p,out,dt){
   const t=p.team, d=teamDir(t), o=ball.owner, sm=t===1?diff.spd:1;
   if(o===p) return ownerAI(p,out,dt);
+  if(wall&&wall.from===p){ seek(p,wall.tx,wall.tz,SPRINT*sm,out); return; }
   if(p.receiveT>0&&!o){ const f=intercept(p,SPRINT); seek(p,f.x,f.z,SPRINT*sm,out); return; }
   if(!o){
     if(p===roles[t].chaser){ const f=intercept(p,SPRINT*sm); seek(p,f.x,f.z,SPRINT*sm,out); return; }
@@ -1403,6 +1512,8 @@ function ownerAI(p,out,dt){
     }
     return;
   }
+  // ワンツーの壁役：ほぼダイレクトで返す
+  if(wall&&wall.to===p){ if(T-(p.gotT||0)>.1) wallReturn(p); return; }
   p.aiT-=dt;
   const dg=Math.hypot(gx-p.pos.x,p.pos.z);
   let opp=null,od=99; for(const o of players){ if(o.team===t) continue; const dd=dXZ(o.pos,p.pos); if(dd<od){od=dd;opp=o;} }
@@ -1414,10 +1525,13 @@ function ownerAI(p,out,dt){
       shoot(p,gx,side*GW*rnd(.35,.85)+err,rnd(.45,.85)); return;
     }
     const style=teamForm[t];
+    // 作戦ごとの特殊パス：2-4-1=ウイング裏、3-2-2=2トップへ浮き球、3-3-1=寄せられたらワンツー
     if(style==='241'&&Math.random()<.4){ const tp=throughPlan(p,null,0,null,q=>q.wing); if(tp&&tp.margin>.2){ throughPass(p,tp); return; } }
+    if(style==='322'&&p.role!=='FW'&&Math.random()<.4){ const fp=feedPlan(p,0,rnd(0,4)); if(fp&&fp.margin>.2){ longFeed(p,fp); return; } }
+    if(style==='331'&&od<4&&Math.random()<.45){ const wp=wallPlanCPU(p); if(wp){ wallPass(p,wp.q,wp.tx,wp.tz); return; } }
     if(Math.random()<(style==='241'?.15:.25)){ const tp=throughPlan(p,null); if(tp&&tp.margin>.35){ throughPass(p,tp); return; } }
-    const q=bestPassTarget(p,null,style==='331');
-    if(q&&((od<2.3&&Math.random()<.75)||Math.random()<.16)){ const dq=dXZ(p.pos,q.pos); passTo(p,q,style==='331'?(dq>12&&Math.random()<.75):(dq>17&&Math.random()<.4)); return; }
+    const q=bestPassTarget(p,null,style==='322');
+    if(q&&((od<2.3&&Math.random()<.75)||Math.random()<.16)){ const dq=dXZ(p.pos,q.pos); passTo(p,q,style==='322'?(dq>12&&Math.random()<.75):(dq>17&&Math.random()<.4)); return; }
   }
   let dx=gx-p.pos.x, dz=-p.pos.z*.6; let n=Math.hypot(dx,dz)||1; dx/=n; dz/=n;
   if(opp&&od<4.5){ const ax=p.pos.x-opp.pos.x, az=p.pos.z-opp.pos.z, an=Math.hypot(ax,az)||1, w=(4.5-od)/4.5*1.3; dx+=ax/an*w; dz+=az/an*w; n=Math.hypot(dx,dz)||1; dx/=n; dz/=n; }
@@ -1457,7 +1571,10 @@ function userControl(p,out){
   // intended receiver runs onto the pass automatically
   if(!ball.owner&&ball.passTo===p&&p.receiveT>0){ const f=intercept(p,SPRINT); seek(p,f.x,f.z,SPRINT,out); return; }
   const i=inputVec(); const has=ball.owner===p;
-  const spd=(sprinting()?SPRINT:RUN)*(has?.97:1);
+  // ワンツーの出し手：入力がなければ予定地点へ自動でダッシュ、入力中も全力で走る
+  const one=wall&&wall.from===p;
+  if(one&&i.m<=.12){ seek(p,wall.tx,wall.tz,SPRINT,out); return; }
+  const spd=(one||sprinting()?SPRINT:RUN)*(has?.97:1);
   if(i.m>.12){ const k=Math.min(1,i.m*1.15)*spd; out.set(i.x*k,0,i.z*k); }
   else if(!ball.owner&&p.receiveT>0){ const f=intercept(p); seek(p,f.x,f.z,RUN,out); }
   else out.set(0,0,0);
@@ -1467,6 +1584,8 @@ function userControl(p,out){
 const tmpV=new THREE.Vector3();
 function updatePlayers(dt){
   const live=state==='play';
+  // ワンツーは時間切れ・プレー中断・他の選手が持ったら打ち切り
+  if(wall&&(!live||T>wall.until||(ball.owner&&ball.owner!==wall.to))) wall=null;
   computeRoles();
   for(const p of players){
     p.pickupCD=Math.max(0,p.pickupCD-dt); p.tackleCD=Math.max(0,p.tackleCD-dt);
@@ -1515,7 +1634,8 @@ function tryPickup(){
   }
   ball.owner=best; ball.lastTouch=best.team; ball.passTo=null; best.gotT=T; best.drib=0;
   players.forEach(q=>q.receiveT=0);
-  if(best.team===0) setActive(best);
+  if(wall&&wall.to!==best) wall=null;
+  if(best.team===0&&!(wall&&wall.to===best)) setActive(best);
 }
 function gkCheck(){
   if(ball.owner||state!=='play') return;
@@ -1702,8 +1822,7 @@ function updateVisuals(dt){
   cursorRing.visible=mouse.on&&mouse.inside&&state!=='menu';
   if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const hot=ball.owner===active&&mousePassTarget(); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
   if(passing&&ball.owner===active){ passHold+=dt;
-    if(passHold>.22&&myForm==='331'){ throughMark.visible=false; const q=userPassTarget(true); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); }
-    else if(passHold>.22){ const pl=wingThroughPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1); } }
+    if(passHold>.22){ const pl=FORMATIONS[myForm].holdPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1); } }
     else { throughMark.visible=false; const q=userPassTarget(false); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); } }
   else { targetRing.visible=false; throughMark.visible=false; }
   if(charging&&ball.owner===active){
@@ -2001,7 +2120,7 @@ function selectCpuFormation(k){
   if(k!=='auto') applyFormation(k,1);
   if(state==='menu') resetPositions();
 }
-function prepareCpuFormation(){ if(cpuChoice==='auto') applyFormation(Math.random()<.5?'331':'241',1); }
+function prepareCpuFormation(){ if(cpuChoice==='auto'){ const ks=Object.keys(FORMATIONS); applyFormation(ks[Math.floor(Math.random()*ks.length)],1); } }
 document.querySelectorAll('#cfSeg button').forEach(b=>b.addEventListener('click',()=>selectCpuFormation(b.dataset.f)));
 selectCpuFormation(cpuChoice);
 setQuality(HQ);
