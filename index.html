@@ -25,22 +25,34 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .bug .tm i{width:10px;height:10px;border-radius:50%;display:block;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
 .bug .t0 i{background:var(--tin)} .bug .t1 i{background:var(--t1)}
 .bug .sc{font-family:var(--f-num);font-size:20px;font-weight:700;padding:2px 10px;background:var(--chalk);color:var(--ink);display:flex;align-items:center;gap:6px}
-.bug .clk{font-family:var(--f-num);font-weight:600;font-size:13px;padding:6px 10px;color:var(--gold);border-left:1px solid var(--line);display:flex;align-items:center;white-space:nowrap}
+.bug .clk{font-family:var(--f-num);font-weight:600;font-size:13px;padding:6px 10px;color:var(--gold);border-left:1px solid var(--line);display:flex;align-items:center;white-space:pre}
+.bug .clk i{font-style:normal;display:inline-block;width:.62em;text-align:center}
 /* 勢いゲージ：中央から外側へ伸びる2本のバー。ラッシュ中は点滅 */
 .hudL{display:flex;flex-direction:column;gap:4px;min-width:0}
-.mom{display:flex;align-items:center;gap:6px;height:10px}
+.mom{display:flex;align-items:center;gap:6px;height:16px}
 .mom small{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.1em;line-height:1}
 .mb{flex:1;height:6px;border-radius:3px;background:rgba(10,18,14,.7);border:1px solid var(--line);overflow:hidden;display:flex}
 .mb.m0{justify-content:flex-end}
 .mb i{display:block;height:100%;width:0;transition:width .2s}
 .m0 i{background:var(--tin)} .m1 i{background:var(--t1)}
-.mb.full i{background:var(--gold)}
+.mb.full{border-color:var(--gold)}
 .mb.rush{border-color:var(--gold);animation:rush .5s ease-in-out infinite alternate}
+.mb.rush i{filter:brightness(1.35)}
 @keyframes rush{to{box-shadow:0 0 10px var(--gold)}}
+/* ラッシュ中のチーム側に出る「⚡RUSH 残り秒」ラベル（チームカラー） */
+.rl{flex:none;width:58px;font-family:var(--f-num);font-weight:700;font-size:10px;line-height:14px;text-align:center;border-radius:3px;border:1px solid var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap;visibility:hidden}
+.rl.on{visibility:visible}
+#rl0{background:var(--tin);color:var(--chalk)} #rl1{background:var(--t1);color:var(--t1ink)}
+/* ラッシュ中の画面端の発光：自チーム=金、相手=赤 */
+#rushEdge{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+#rushEdge.mine{box-shadow:inset 0 0 70px 14px rgba(255,210,63,.5)}
+#rushEdge.foe{box-shadow:inset 0 0 70px 14px rgba(236,84,68,.55)}
+#rushEdge.on{opacity:1;animation:edge .9s ease-in-out infinite alternate}
+@keyframes edge{from{opacity:.45}to{opacity:1}}
 #skillPop{position:absolute;pointer-events:none;font-family:var(--f-display);font-size:22px;color:var(--gold);-webkit-text-stroke:1.5px var(--ink);text-shadow:0 3px 0 var(--ink);white-space:nowrap;opacity:0;transform:translate(-50%,-100%)}
 #skillPop.go{animation:skp .9s cubic-bezier(.2,1.4,.4,1) forwards}
 @keyframes skp{0%{opacity:0;transform:translate(-50%,-60%) scale(.5)}15%{opacity:1;transform:translate(-50%,-100%) scale(1.1)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-180%) scale(1)}}
-@media (prefers-reduced-motion:reduce){.mb.rush{animation:none}}
+@media (prefers-reduced-motion:reduce){.mb.rush,#rushEdge.on{animation:none}}
 #pauseBtn{pointer-events:auto;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--panel);font-family:var(--f-num);font-weight:700;font-size:14px}
 @media (max-width:460px){.bug .tm span{display:none}.bug .tm{padding:6px 8px}}
 
@@ -263,6 +275,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
 </style>
 
 <div id="app">
+  <div id="rushEdge" aria-hidden="true"></div>
   <div id="hud">
     <div class="hudL">
       <div class="bug" aria-live="polite">
@@ -271,7 +284,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
         <div class="tm t1"><span class="tn1">レアル・ツミキ</span><i></i></div>
         <div class="clk" id="clock">前半 00:00</div>
       </div>
-      <div class="mom" aria-label="勢いゲージ"><div class="mb m0" id="mb0"><i id="m0"></i></div><small>勢い</small><div class="mb m1" id="mb1"><i id="m1"></i></div></div>
+      <div class="mom" aria-label="勢いゲージ"><b class="rl" id="rl0"></b><div class="mb m0" id="mb0"><i id="m0"></i></div><small>勢い</small><div class="mb m1" id="mb1"><i id="m1"></i></div><b class="rl" id="rl1"></b></div>
     </div>
     <button id="pauseBtn" aria-label="一時停止">II</button>
   </div>
@@ -1094,6 +1107,13 @@ function rebuildCpuPlayers(){
 // ラッシュタイム中の選手の足元に光るリング
 { const rg=new THREE.RingGeometry(.78,.92,32), rm=[new THREE.MeshBasicMaterial({color:new THREE.Color(.8,1.4,2.6),transparent:true,opacity:.8,depthWrite:false}),new THREE.MeshBasicMaterial({color:new THREE.Color(2.6,1,.8),transparent:true,opacity:.8,depthWrite:false})];
   players.forEach(p=>{ p.rushRing=new THREE.Mesh(rg,rm[p.team]); p.rushRing.rotation.x=-Math.PI/2; p.rushRing.visible=false; scene.add(p.rushRing); }); }
+// ラッシュタイム中の選手の後ろに伸びるスピード線（残像）。原点から後方(-X)へ伸びる細い板を数本
+{ const sg=new THREE.PlaneGeometry(1,.06); sg.translate(-.5,0,0);
+  const sm=[new THREE.Color(1.3,1.9,3),new THREE.Color(2.4,2.3,2)].map(c=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.7,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));
+  const lines=[[.35,.22],[.8,-.26],[1.2,.14],[1.55,-.08]]; // [高さ, 横ずれ]
+  players.forEach(p=>{ const g=new THREE.Group(); g.visible=false;
+    p.streaks=lines.map(([y,z],i)=>{ const m=new THREE.Mesh(sg,sm[p.team]); m.position.set(-.25,y,z); m.userData.ph=i*1.7; g.add(m); return m; });
+    p.streakG=g; scene.add(g); }); }
 const keeper=t=>players.find(p=>p.team===t&&p.role==='GK');
 const teamForm=['331','331'];
 function applyFormation(key,team=0){
@@ -1242,13 +1262,20 @@ function updateMomentum(dt){
     else { mom[t]=Math.max(0,mom[t]-MOM_DECAY*dt); if(mom[t]>=1) startRush(t); }
   }
 }
-const momUI=[0,1].map(t=>({bar:$('#mb'+t),fill:$('#m'+t),w:-1,rush:null,full:null}));
+const momUI=[0,1].map(t=>({bar:$('#mb'+t),fill:$('#m'+t),lab:$('#rl'+t),w:-1,rush:null,full:null,sec:-1}));
+const rushEdge=$('#rushEdge'); let edgeMode='';
 function drawMomentum(){
   momUI.forEach((u,t)=>{
     const w=Math.round(mom[t]*100); if(w!==u.w){ u.w=w; u.fill.style.width=w+'%'; }
-    const r=rushT[t]>0; if(r!==u.rush){ u.rush=r; u.bar.classList.toggle('rush',r); }
-    const f=r||mom[t]>.8; if(f!==u.full){ u.full=f; u.bar.classList.toggle('full',f); }
+    const r=rushT[t]>0; if(r!==u.rush){ u.rush=r; u.bar.classList.toggle('rush',r); u.lab.classList.toggle('on',r); }
+    const f=!r&&mom[t]>.8; if(f!==u.full){ u.full=f; u.bar.classList.toggle('full',f); }
+    // 残り秒数のカウントダウン
+    const sec=r?Math.ceil(rushT[t]):0; if(sec!==u.sec){ u.sec=sec; u.lab.textContent=r?'⚡RUSH '+sec:''; }
   });
+  // 画面端の発光：プレー中のみ。両チーム同時なら自チームを優先
+  const live=state==='play'||state==='kickoff';
+  const m=!live?'':rushT[0]>0?'mine':rushT[1]>0?'foe':'';
+  if(m!==edgeMode){ if(m) rushEdge.className=m+' on'; else rushEdge.classList.remove('on'); edgeMode=m; }
 }
 
 // ファウルは選手更新ループの外（step）でまとめて処理する
@@ -1289,9 +1316,10 @@ function clockText(){
   const s=Math.min(clock,half*HALF_LEN), m=Math.floor(s/60), ss=Math.floor(s%60);
   return (half===1?'前半 ':'後半 ')+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
 }
-let sbMinute=-1;
+let sbMinute=-1, clkTxt='';
 function updateClock(){
-  $('#clock').textContent=clockText();
+  // 数字を1文字ずつ固定幅の枠に入れ、数字が変わっても枠の長さが変わらないようにする
+  const ct=clockText(); if(ct!==clkTxt){ clkTxt=ct; $('#clock').innerHTML=ct.replace(/\d/g,'<i>$&</i>'); }
   const m=Math.floor(Math.min(clock,half*HALF_LEN)/60); if(m!==sbMinute){ sbMinute=m; drawScoreboard(); }
 }
 
@@ -2377,6 +2405,10 @@ function updateVisuals(dt){
     p.root.position.set(p.pos.x,y,p.pos.z); p.root.rotation.set(0,p.face+spin,rz);
     p.rushRing.visible=rushT[p.team]>0&&state==='play';
     if(p.rushRing.visible){ p.rushRing.position.set(p.pos.x,.025,p.pos.z); p.rushRing.scale.setScalar(1+Math.sin(T*9+p.seed)*.08); }
+    // スピード線：一定以上の速さで走っているときだけ、速いほど長く。長さを揺らしてちらつかせる
+    p.streakG.visible=p.rushRing.visible&&sp>3;
+    if(p.streakG.visible){ p.streakG.position.set(p.pos.x,0,p.pos.z); p.streakG.rotation.y=Math.atan2(-p.vel.z,p.vel.x);
+      const L=clamp((sp-3)*.28,.3,2.2); for(const m of p.streaks) m.scale.x=L*(.65+.35*Math.sin(T*23+m.userData.ph+p.seed)); }
     p.body.scale.y=1-p.kickAnim*.07;
     if(p.key) p.key.rotation.z+=dt*(1.2+sp*1.1);
     const bsz=1.15-y*.4; p.blob.position.set(p.pos.x,.012,p.pos.z); p.blob.scale.set(bsz,1,bsz);
