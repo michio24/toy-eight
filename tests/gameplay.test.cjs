@@ -1036,7 +1036,7 @@ test('GK cannot cover near to far immediately, in either goal or direction', () 
   for (const team of [0, 1]) for (const side of [-1, 1]) for (const hz of [60, 120]) {
     const c = context(['gkAI', 'guard', 'seek', 'updatePlayers']), p = player(team, 'GK'), d = c.teamDir(team);
     const targetZ = -side * 3;
-    p.pos.set(-c.HL * d + d * .9, 0, side * 3); p.vel.z = side * c.RUN * .6;
+    p.pos.set(-c.HL * d + d * .9, 0, side * 3); p.vel.z = side * c.RUN * .8;
     c.players = [p]; c.active = null; c.ball.owner = null; c.ball.pos.set(p.pos.x + d * 5, .21, targetZ);
     c.ball.vel.x = -d * 20; c.tmpV = new Vector(); c.computeRoles = () => {};
     c.waitingForGkKick = () => false; c.intercept = () => ({x: p.pos.x, z: targetZ});
@@ -1044,7 +1044,7 @@ test('GK cannot cover near to far immediately, in either goal or direction', () 
     let elapsed = 0;
     c.gkShotArrival = () => ({t: .5 - elapsed, z: targetZ, y: 1});
     const out = new Vector(); c.gkAI(p, out, 1 / hz);
-    assert.ok(Math.abs(out.z) <= c.RUN * .6);
+    assert.ok(Math.abs(out.z) <= c.RUN * .8);
     c.updatePlayers(1 / hz); elapsed += 1 / hz;
     assert.ok(p.vel.z * side > 0, 'reversing direction takes time');
     for (let i = 1; i < hz / 2; i++) {
@@ -1052,6 +1052,20 @@ test('GK cannot cover near to far immediately, in either goal or direction', () 
       assert.ok(Math.abs(p.vel.z) <= 7, 'dive speed is bounded');
     }
     assert.ok(Math.abs(p.pos.z - targetZ) > 1.45, 'far shot remains outside the diving save radius');
+  }
+});
+
+test('GK can move across to a cross landing spot before it arrives', () => {
+  for (const team of [0, 1]) for (const side of [-1, 1]) for (const hz of [60, 120]) {
+    const c = context(['gkAI', 'guard', 'seek', 'updatePlayers']), p = player(team, 'GK'), d = c.teamDir(team);
+    p.pos.set(-c.HL * d + d * 2, 0, 0);
+    c.players = [p]; c.active = null; c.ball.owner = null;
+    c.ball.pos.set(p.pos.x, 3, side * 3);
+    c.waitingForGkKick = () => false; c.intercept = () => ({x: p.pos.x, z: side * 3});
+    c.tmpV = new Vector(); c.computeRoles = () => {}; c.lerpAngle = a => a;
+    for (let i = 0; i < hz * .8; i++) c.updatePlayers(1 / hz);
+    assert.ok(Math.abs(p.pos.z - side * 3) < .9, 'keeper reaches catching range in 0.8 seconds');
+    assert.ok(Math.abs(p.vel.z) <= c.RUN * .8, 'lateral movement stays below forward running speed');
   }
 });
 

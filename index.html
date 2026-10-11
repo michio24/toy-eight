@@ -3247,7 +3247,7 @@ function gkAI(p,out,dt){
   tx=gx+d*clamp((tx-gx)*d,.5,11); tz=clamp(tz,-10,10);
   seek(p,tx,tz,spd,out);
   // 横のステップは前への飛び出しより遅くし、ニアからファーを一気に埋めない。
-  out.z=clamp(out.z,-RUN*.6*sm,RUN*.6*sm);
+  out.z=clamp(out.z,-RUN*.8*sm,RUN*.8*sm);
 }
 function userControl(p,out,dt){
   if(wallReceiving(p)){ const f=intercept(p,SPRINT*WALL_RETURN_RUN_MUL); seek(p,f.x,f.z,SPRINT*WALL_RETURN_RUN_MUL,out); return; }
@@ -3314,7 +3314,7 @@ function updatePlayers(dt){
     else fieldAI(p,tmpV,dt);
     if(steer&&p.tackleT<=0){ const bm=live?rushMul(p.team)*(STAD.speed||1)*throughRunMul(p):1, a=1-Math.exp(-dt*(ball.owner===p?8:11)*STAD.grip);
       // GKの守備中は横の切り返しにも時間がかかる。保持中の操作・配球は従来どおり。
-      const az=p.role==='GK'&&ball.owner!==p?1-Math.exp(-dt*4*STAD.grip):a;
+      const az=p.role==='GK'&&ball.owner!==p?1-Math.exp(-dt*6*STAD.grip):a;
       p.vel.x+=(tmpV.x*bm-p.vel.x)*a; p.vel.z+=(tmpV.z*bm-p.vel.z)*az; }
     if(state==='kickoff'||state==='half'||state==='end') p.vel.set(0,0,0);
     p.pos.addScaledVector(p.vel,dt);
