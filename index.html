@@ -2287,9 +2287,9 @@ function intercept(p,spd=7.5){ const tmin=landTime()*.9; let t=tmin,f=ballFuture
 
 // ---------- input ----------
 const keys={}; const btn={pass:false,shoot:false,sprint:false};
-let passHold=0, passing=false, passKeeper=null, charging=false, charge=0, chargeKeeper=null;
-const passingPlayer=()=>passKeeper||active;
-const shootingPlayer=()=>chargeKeeper||active;
+let passHold=0, passing=false, passPlayer=null, charging=false, charge=0, chargePlayer=null, chargeHadBall=false;
+const passingPlayer=()=>passPlayer||active;
+const shootingPlayer=()=>chargePlayer||active;
 const defenseButtons=new Set(); let defenseHold=0;
 function defenseCharging(){
   const o=ball.owner;
@@ -2329,6 +2329,7 @@ function inputVec(p=active){
 }
 const sprinting=()=>btn.sprint||stick.dash||keys.ShiftLeft||keys.ShiftRight||(mouse.on&&mouse.inside&&mouseDist()>7);
 function canAct(){ return state==='play' && !paused && active; }
+function canKick(p){ return canAct()&&p&&ball.owner===p&&p.stunT<=0&&p.tackleT<=0&&p.fooledT<=0; }
 // how long a defender needs to get goal-side of the threat (lower is better)
 function defCost(p){
   const o=ball.owner;
@@ -2360,17 +2361,16 @@ function press(b){
     defenseButtons.add(b); switchPlayer(); return;
   }
   if(b==='pass'){
-    passKeeper=null;
-    if(o&&o.team===0&&o.role==='GK'){ passKeeper=o; passing=true; passHold=0; }
-    else if(o===active){ passing=true; passHold=0; }
+    passPlayer=null;
+    if(o&&o.team===0&&(o.role==='GK'||o===active)&&canKick(o)){ passPlayer=o; passing=true; passHold=0; }
     else if(wall&&o&&o===wall.to&&wall.from===active&&!o.locked) wallReturn(o); // 走り込みを待つ壁役にすぐ返させる
   } else if(b==='shoot'){
-    chargeKeeper=null;
+    chargePlayer=null;
     if(!o&&ball.cross&&ball.cross.team===0) ball.cross.arm=T; // クロスへの合わせを予約（押し直すと予約し直し）
-    if(o&&o.team===0&&o.role==='GK'){ chargeKeeper=o; charging=true; charge=0; }
-    else if(o===active){ charging=true; charge=0; }
+    if(o&&o.team===0&&(o.role==='GK'||o===active)){ if(canKick(o)){ chargePlayer=o; charging=true; charge=0; } }
     else if(o&&o.team===1){ startTackle(active,true); }
-    else { charging=true; charge=0; }
+    else { chargePlayer=active; charging=true; charge=0; }
+    chargeHadBall=charging&&ball.owner===shootingPlayer();
   }
 }
 function release(b){
@@ -2378,15 +2378,37 @@ function release(b){
   defenseButtons.delete(b); if(!defenseButtons.size) defenseHold=0;
   if(b==='pass'&&passing){ passing=false; targetRing.visible=false; throughMark.visible=false;
     const p=passingPlayer();
-    if(canAct()&&ball.owner===p){
+    if(canKick(p)){
       // 長押しはフォーメーションごとの特殊パス。成立しなければ通常パス
       const F=FORMATIONS[myForm], pl=p.role!=='GK'&&passHold>.22?F.holdPlan():null;
       if(pl) F.holdKick(active,pl); else userPass(false,p); }
-    passKeeper=null; }
-  if(b==='shoot'&&charging){ charging=false; $('#meter').hidden=true; if(canAct()&&ball.owner===shootingPlayer()) userShoot(Math.max(.15,charge)); chargeKeeper=null; }
+    passPlayer=null; }
+  if(b==='shoot'&&charging){ charging=false; $('#meter').hidden=true; if(canKick(shootingPlayer())) userShoot(Math.max(.15,charge)); chargePlayer=null; chargeHadBall=false; }
 }
 // プレーが止まったら押しっぱなしのパス・シュートを取り消す（離して押し直すまで発動しない）
-function cancelHolds(){ passing=charging=false; passKeeper=chargeKeeper=null; charge=passHold=defenseHold=0; defenseButtons.clear(); meter.hidden=true; targetRing.visible=throughMark.visible=false; }
+function cancelHolds(){ passing=charging=chargeHadBall=false; passPlayer=chargePlayer=null; charge=passHold=defenseHold=0; defenseButtons.clear(); meter.hidden=true; targetRing.visible=throughMark.visible=false; }
+// ゲージは描画ではなくプレー時間で進める。奪われた入力は次の保持者に引き継がない。
+function updateActionHolds(dt){
+  if(passing){
+    if(canKick(passingPlayer())) passHold+=dt;
+    else { passing=false; passPlayer=null; passHold=0; targetRing.visible=throughMark.visible=false; }
+  }
+  if(charging){
+    const p=shootingPlayer();
+    if(canKick(p)){ chargeHadBall=true; charge=Math.min(1,charge+dt/.85); }
+    else if(chargeHadBall||ball.owner||!canAct()||!p||p.stunT>0||p.tackleT>0||p.fooledT>0){ charging=chargeHadBall=false; chargePlayer=null; charge=0; meter.hidden=true; }
+  }
+}
+function resetInput(){
+  for(const k in keys) keys[k]=false;
+  for(const b in btn) btn[b]=false;
+  stick.id=null; stick.x=stick.y=0; stick.dash=false;
+  mouse.on=mouse.inside=false;
+  SK.hist.length=0; SK.last=null;
+  knob.style.transform=''; stickEl.classList.remove('on','dash');
+  document.querySelectorAll('#btns button').forEach(b=>b.classList.remove('down'));
+  cv.style.cursor=''; cursorRing.visible=false; cancelHolds();
+}
 function userDir(p=active){ const i=inputVec(p); return i.m>.2?{x:i.x,z:i.z}:{x:Math.sin(p.face),z:Math.cos(p.face)}; }
 function userPassTarget(loft,p=active){
   const i=inputVec(p);
@@ -2488,7 +2510,7 @@ function skillPop(text,p){
 }
 addEventListener('keydown',e=>{
   if(!$('#helpOv').hidden||!$('#formView').hidden||!$('#teamView').hidden||!$('#stadView').hidden){ if(e.code==='Escape') closeTopSheet(); return; }
-  if(e.code==='KeyP'||e.code==='Escape'){ togglePause(); return; }
+  if(e.code==='KeyP'||e.code==='Escape'){ if(!e.repeat) togglePause(); return; }
   if((state==='replay'||state==='card')&&!paused){ if(!e.repeat) skipCinematic(); return; }
   if(e.code==='KeyM'&&!e.repeat){ radarOn=!radarOn; try{ localStorage.setItem('toy8-radar',radarOn?'1':'0'); }catch(_){} return; }
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
@@ -2504,7 +2526,7 @@ addEventListener('keyup',e=>{
   if(e.code==='KeyK'||e.code==='KeyX'||e.code==='Space') release('shoot');
   if(e.code==='KeyL'||e.code==='KeyC') release('switch');
 });
-addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; cancelHolds(); });
+addEventListener('blur',resetInput);
 
 // touch
 const touchEl=$('#touch'), stickEl=$('#stick'), knob=$('#knob');
@@ -2524,13 +2546,14 @@ $('#stickZone').addEventListener('pointermove',e=>{
   const kx=dash?dx*1.2:dx, ky=dash?dy*1.2:dy; knob.style.transform=`translate(${kx}px,${ky}px)`;
 });
 const endStick=e=>{ if(e.pointerId!==stick.id) return; stick.id=null; stick.x=stick.y=0; stick.dash=false; knob.style.transform=''; stickEl.classList.remove('on','dash'); };
-$('#stickZone').addEventListener('pointerup',endStick); $('#stickZone').addEventListener('pointercancel',endStick);
+$('#stickZone').addEventListener('pointerup',endStick); $('#stickZone').addEventListener('pointercancel',endStick); $('#stickZone').addEventListener('lostpointercapture',endStick);
 stickEl.style.left='22%'; stickEl.style.top='78%';
 document.querySelectorAll('#btns button').forEach(b=>{
   const k=b.dataset.b;
   b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);b.classList.add('down');initAudio();press(k);});
   const up=()=>{ if(!b.classList.contains('down')) return; b.classList.remove('down'); release(k); };
-  b.addEventListener('pointerup',up); b.addEventListener('pointercancel',up); b.addEventListener('lostpointercapture',up);
+  const cancel=()=>{ if(!b.classList.contains('down')) return; b.classList.remove('down'); btn[k]=false; cancelHolds(); };
+  b.addEventListener('pointerup',up); b.addEventListener('pointercancel',cancel); b.addEventListener('lostpointercapture',cancel);
 });
 const CUR_IDLE=new THREE.Color(1.6,1.6,1.6), CUR_HOT=new THREE.Color(.6,1.4,2.2);
 const cursorRing=new THREE.Mesh(new THREE.RingGeometry(.32,.42,32),new THREE.MeshBasicMaterial({color:CUR_IDLE.clone(),transparent:true,opacity:.85,depthWrite:false}));
@@ -2547,6 +2570,8 @@ cv.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse'||!(e.button in
   try{ cv.setPointerCapture(e.pointerId); }catch(_){}
   press(mBtn[e.button]); });
 cv.addEventListener('pointerup',e=>{ if(e.pointerType!=='mouse'||!(e.button in mBtn)) return; release(mBtn[e.button]); });
+cv.addEventListener('pointercancel',e=>{ if(e.pointerType==='mouse') cancelHolds(); });
+cv.addEventListener('lostpointercapture',e=>{ if(e.pointerType==='mouse') cancelHolds(); });
 // ---------- radar (overhead mini-map) ----------
 const radar=$('#radar'), rctx=radar.getContext('2d');
 let radarOn=true; try{ radarOn=localStorage.getItem('toy8-radar')!=='0'; }catch(e){}
@@ -2752,7 +2777,7 @@ function fieldAI(p,out,dt){
 function ownerAI(p,out,dt){
   const t=p.team, d=teamDir(t), gx=HL*d, sm=t===1?diff.spd:1;
   out.set(0,0,0);
-  // プレイヤー側GKは、キャッチ後もゴールキック時もシュート操作を待つ。
+  // プレイヤー側GKは、キャッチ後もゴールキック時もパス・シュート操作を待つ。
   if(t===0&&p.role==='GK'){ p.face=lerpAngle(p.face,d>0?Math.PI/2:-Math.PI/2,.1); return; }
   if(p.locked){
     p.aiT-=dt;
@@ -2767,7 +2792,7 @@ function ownerAI(p,out,dt){
   }
   if(p.role==='GK'){
     p.face=lerpAngle(p.face,d>0?Math.PI/2:-Math.PI/2,.1);
-    if(charging&&chargeKeeper===p) return;
+    if(charging&&chargePlayer===p) return;
     p.holdT-=dt;
     if(p.holdT<=0){
       const q=bestPassTarget(p,null);
@@ -2830,7 +2855,7 @@ function gkShotArrival(xl,d){
   return null;
 }
 function gkAI(p,out,dt){
-  if(ball.owner===p) return ownerAI(p,out,dt);
+  if(ball.owner===p){ p.diveT=Math.max(0,p.diveT-dt); return ownerAI(p,out,dt); }
   const t=p.team, d=teamDir(t), gx=-HL*d, sm=(t===1?diff.spd:1);
   if(p.diveT>0){ p.diveT-=dt; p.vel.multiplyScalar(1-dt*2.2); return 'nosteer'; }
   // PK：キック後は読んだ方向に賭けたまま動けない／キック前はゴール中央で構える
@@ -2854,7 +2879,7 @@ function gkAI(p,out,dt){
       const tt=arrival.t, zc=arrival.z;
       if(Math.abs(zc)<GW+1.2&&arrival.y<GH+BR){
         tz=clamp(zc,-GW,GW); tx=gx+d*.9; spd=SPRINT*1.1*sm;
-        if(Math.abs(zc-p.pos.z)>.9&&tt<.32&&Math.abs(p.pos.x-xl)<1.3){ p.diveT=.6; p.diveDir=Math.sign(zc-p.pos.z); p.vel.z=clamp((zc-p.pos.z)*2.2/(1-Math.exp(-2.2*Math.max(tt,.08))),-10.5,10.5); p.vel.x*=.3; return 'nosteer'; }
+        if((Math.abs(zc-p.pos.z)>.9||arrival.y>1.9)&&tt<.32&&Math.abs(p.pos.x-xl)<1.3){ p.diveT=.6; p.diveDir=Math.sign(zc-p.pos.z); p.vel.z=clamp((zc-p.pos.z)*2.2/(1-Math.exp(-2.2*Math.max(tt,.08))),-10.5,10.5); p.vel.x*=.3; return 'nosteer'; }
       }
     }
   }
@@ -2906,7 +2931,7 @@ function updatePlayers(dt){
     else if(p===active) userControl(p,tmpV,dt);
     else if(p.role==='GK'){ if(gkAI(p,tmpV,dt)==='nosteer') steer=false; }
     else fieldAI(p,tmpV,dt);
-    if(steer){ const bm=live?rushMul(p.team)*(STAD.speed||1):1, a=1-Math.exp(-dt*(ball.owner===p?8:11)*STAD.grip); p.vel.x+=(tmpV.x*bm-p.vel.x)*a; p.vel.z+=(tmpV.z*bm-p.vel.z)*a; }
+    if(steer&&p.tackleT<=0){ const bm=live?rushMul(p.team)*(STAD.speed||1):1, a=1-Math.exp(-dt*(ball.owner===p?8:11)*STAD.grip); p.vel.x+=(tmpV.x*bm-p.vel.x)*a; p.vel.z+=(tmpV.z*bm-p.vel.z)*a; }
     if(state==='kickoff'||state==='half'||state==='end') p.vel.set(0,0,0);
     p.pos.addScaledVector(p.vel,dt);
     // PK中はユーザー操作の選手も含めてエリア外に留める
@@ -3102,7 +3127,8 @@ function setupRestart(kind,team,x,z,opt={}){
   else if(kind==='corner'){ ix=-Math.sign(x)*.45; iz=-Math.sign(z); const n=Math.hypot(ix,iz); ix/=n; iz/=n; }
   else if(kind==='fk'||kind==='pk'){ ix=HL*teamDir(team)-x; iz=-z; const n=Math.hypot(ix,iz)||1; ix/=n; iz/=n; }
   else { ix=teamDir(team); iz=0; }
-  taker.pos.set(x-ix*.55,0,z-iz*.55); taker.vel.set(0,0,0); taker.face=Math.atan2(ix,iz); taker.stunT=0;
+  taker.pos.set(x-ix*.55,0,z-iz*.55); taker.vel.set(0,0,0); taker.face=Math.atan2(ix,iz);
+  taker.stunT=taker.tackleT=taker.diveT=taker.fooledT=taker.spinT=taker.evadeT=taker.boostT=taker.pkHold=0; taker.tackleMiss=false;
   taker.locked=true; taker.holdT=0;
   taker.aiT=team===1?(kind==='pk'?rnd(1.6,2.2):opt.direct?rnd(1.3,1.8):rnd(.9,1.4)):1.0;
   ball.owner=taker; ball.lastTouch=team;
@@ -3288,7 +3314,7 @@ function updateVisuals(dt){
   placeTag(cpuTag,cpuRing.visible?co:null,2.6,4); // 敵は矢印が無いので頭のすぐ上
   cursorRing.visible=mouse.on&&mouse.inside&&state!=='menu';
   if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const p=ball.owner; const hot=p&&p.team===0&&(p===active||p.role==='GK')&&mousePassTarget(p); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
-  if(passing&&ball.owner===passingPlayer()){ passHold+=dt;
+  if(passing&&ball.owner===passingPlayer()){
     const p=passingPlayer();
     if(p.role!=='GK'&&passHold>.22){ const pl=FORMATIONS[myForm].holdPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1); } }
     else { throughMark.visible=false; const q=(mouse.on&&mouse.inside?mousePassTarget(p):null)||userPassTarget(false,p); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); } }
@@ -3304,7 +3330,6 @@ function updateVisuals(dt){
     const k=keeper(0); targetRing.visible=true; targetRing.position.set(k.pos.x+.9,.035,pkChoice*2.6); }
   const shooter=shootingPlayer();
   if(charging&&ball.owner===shooter){
-    charge=Math.min(1,charge+dt/.85);
     proj.set(shooter.pos.x,2.95,shooter.pos.z).project(camera);
     meter.hidden=false; meter.style.left=((proj.x+1)/2*innerWidth)+'px'; meter.style.top=((1-proj.y)/2*innerHeight)+'px';
     meterFill.style.width=(charge*100)+'%';
@@ -3316,7 +3341,7 @@ function updateVisuals(dt){
     if(gk){ const {aim,dir}=gkKickInput(shooter), pl=gkKickPlan(shooter,Math.max(.15,charge),dir,aim);
       targetRing.visible=throughMark.visible=!!pl;
       if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.x,.05,pl.z); throughMark.rotation.z+=dt*4; throughMark.scale.set(1,1,1); } }
-  } else if(!charging) meter.hidden=true;
+  } else meter.hidden=true;
   }
   // nets
   goals.forEach(g=>{ g.back.position.x=g.s*(HL+GD)+g.s*Math.sin(T*26)*.22*g.shake; g.shake=Math.max(0,g.shake-dt*1.4); });
@@ -3628,8 +3653,10 @@ function step(dt){
   if(state==='kickoff'){ stateT-=dt; if(stateT<=0){ state='play'; sfx.whistle(.35); } updatePlayers(dt); updateBall(dt); }
   else if(state==='play'){
     updateDefenseHold(dt);
+    updateActionHolds(dt);
     clock+=dt*CLOCK_RATE; updateClock();
     if(clock>=half*HALF_LEN){
+      cancelHolds();
       sfx.whistle(.45,half===1?2:3);
       if(half===1){ state='half'; stateT=2.8; banner('ハーフタイム',score[0]+' - '+score[1],2600); }
       else { state='end'; stateT=1.6; banner('試合終了',score[0]+' - '+score[1],1800); }
@@ -3653,12 +3680,12 @@ function step(dt){
     }
     // standing close to a CPU carrier pokes the ball loose now and then
     { const o=ball.owner;
-      if(active&&o&&o.team===1&&!o.locked&&o.role!=='GK'&&active.stunT<=0&&active.tackleT<=0&&dXZ(active.pos,ball.pos)<.85&&Math.random()<dt*1.6){
+      if(active&&o&&o.team===1&&!o.locked&&o.role!=='GK'&&o.evadeT<=0&&active.stunT<=0&&active.fooledT<=0&&active.tackleT<=0&&dXZ(active.pos,ball.pos)<.85&&Math.random()<dt*1.6){
         ball.owner=null; o.stunT=.35; o.pickupCD=.5; const fx=Math.sin(active.face), fz=Math.cos(active.face);
         ball.vel.set(fx*3+rnd(-1,1),.3,fz*3+rnd(-1,1)); ball.lastTouch=0; ball.passTo=null; ball.kicker=null; sfx.tackle(); addMom(0,.04);
         ST.tackles[0]++; active.st.tk++;
       } }
-    if(charging&&ball.owner===shootingPlayer()&&charge>=1){ charging=false; meter.hidden=true; userShoot(1); chargeKeeper=null; }
+    if(charging&&canKick(shootingPlayer())&&charge>=1){ charging=chargeHadBall=false; meter.hidden=true; userShoot(1); chargePlayer=null; }
     // CPUのPK：キーパーの飛ぶ方向は、キックの瞬間に入れている方向（マウスはカーソルの側）
     if(restartGuard&&restartGuard.kind==='pk'&&restartGuard.team===1){
       let c=0;
@@ -3671,6 +3698,7 @@ function step(dt){
     updatePlayers(dt); updateBall(dt);
     if(pendingFoul){ const f=pendingFoul; pendingFoul=null; callFoul(f.by,f.victim); }
     aerialStrike(); gkCheck(); tryPickup(); checkRules();
+    updateActionHolds(0);
   }
   else if(state==='goal'){ stateT-=dt; updatePlayers(dt); updateBall(dt); if(stateT<=0) startReplay(); }
   else if(state==='half'){ stateT-=dt; if(stateT<=0){ half=2; clock=HALF_LEN; updateClock(); resetWind(); setupKickoff(1); } }
@@ -3688,7 +3716,12 @@ function frame(now){
     else if(slowT>0){ slowT-=raw; dt*=.32; }
     if(state==='replay'){ T+=raw; updateReplay(raw); updateVisuals(raw); }
     else if(state==='card'){ T+=raw; updateCard(raw); updateVisuals(raw); }
-    else { step(dt); updateVisuals(dt); if(state==='play'||state==='goal'||state==='kickoff'){ recordFrame(); if(hlPend.length) flushHighlights(); } }
+    else {
+      // 低FPSでも速い球の受け取り・セーブ判定が選手を飛び越えないよう、最大1/60秒ずつ進める。
+      const n=Math.max(1,Math.ceil(dt*60));
+      for(let i=0;i<n;i++){ step(dt/n); if(state==='replay'||state==='card') break; }
+      updateVisuals(dt); if(state==='play'||state==='goal'||state==='kickoff'){ recordFrame(); if(hlPend.length) flushHighlights(); }
+    }
   }
   updateCamera(raw); updateMouseWorld();
   if(composer) composer.render(raw); else renderer.render(scene,camera);
@@ -3713,6 +3746,7 @@ function togglePause(){
   if(state==='menu'||state==='end') return;
   paused=!paused; $('#pauseOv').hidden=!paused; if(paused&&AC) AC.suspend&&AC.suspend(); else if(AC) AC.resume&&AC.resume();
   cancelHolds();
+  if(paused) resetInput();
 }
 $('#startBtn').addEventListener('click',startGame);
 $('#againBtn').addEventListener('click',startGame);
