@@ -36,7 +36,7 @@ function context(names = []) {
   const c = {Math: Object.create(Math), active: p, players: [p], state: 'play', paused: false, T: 1,
     HL: 30, HW: 20, GW: 3.6, GH: 2.4, BR: .21, RUN: 6.4, SPRINT: 8.6, CLOCK_RATE: 8, HALF_LEN: 1200,
     STAD: {rollK: .7, rollC: .9, bounce: .52, grip: 1}, wind: {x: 3, z: -4}, rushT: [0, 0],
-    THROUGH_RUN_MUL: 1.25, throughRunMul: () => 1, rushMul: () => 1, diff: {spd: 1},
+    THROUGH_RUN_MUL: 1.25, WALL_RETURN_RUN_MUL: 1.15, throughRunMul: () => 1, rushMul: () => 1, diff: {spd: 1},
     ball: {owner: p, pos: new Vector(0, .21, 0), vel: new Vector(), shot: 0, lastTouch: 0},
     keys: {}, btn: {}, stick: {id: null, x: 0, y: 0, dash: false}, mouse: {on: false, inside: false},
     passHold: 0, passing: false, passPlayer: null, crossHold: null, crossTag: node('crossTag'), charging: false, charge: 0, chargePlayer: null, chargeHadBall: false,
@@ -473,7 +473,7 @@ test('3-3-1 passer runs automatically, then follows the return trajectory on bot
     for (const name of ['userControl', 'fieldAI']) {
       c[name](from, out, 1 / 60);
       assert.ok(out.x * d > 0 && out.z > 0);
-      assert.ok(Math.abs(out.length() - c.SPRINT * 1.12) < 1e-9);
+      assert.ok(Math.abs(out.length() - c.SPRINT * c.WALL_RETURN_RUN_MUL) < 1e-9);
     }
     c.ball.owner = rival; assert.equal(!!c.wallReceiving(from), false);
     c.ball.owner = null; c.T = c.ball.wallUntil; assert.equal(!!c.wallReceiving(from), false);
@@ -495,6 +495,21 @@ test('one-two return wins a reachable contest, keeps possession, and respects ex
   c.ball.pos.set(10, .21, 0); c.ball.vel.set(1, 0, 0); from.pos.set(12, 0, 0); rival.pos.set(10, 0, 0);
   c.tryPickup(); assert.equal(c.ball.owner, rival, 'automatic reception does not reach a distant ball');
   c.kick(partner, 1, 0, 10, 0); assert.equal(c.ball.wallUntil, 0);
+});
+
+test('one-two return acceleration applies in simulation to automatic and controlled receivers', () => {
+  for (const team of [0, 1]) for (const controlled of [false, true]) {
+    const {c, from, partner} = wallContext(team), d = c.teamDir(team);
+    vm.runInContext(source('updatePlayers'), c); vm.runInContext(source('throughRunMul'), c);
+    from.throughBoostUntil = c.T + 5; c.wallReturn(partner);
+    assert.equal(c.throughRunMul(from), 1);
+    c.players = [from]; c.active = controlled ? from : null; c.tmpV = new Vector();
+    c.computeRoles = () => {}; c.lerpAngle = a => a; c.intercept = () => ({x: 8 * d, z: 0});
+    c.updatePlayers(1 / 60);
+    const expected = c.SPRINT * c.WALL_RETURN_RUN_MUL * (1 - Math.exp(-11 / 60));
+    assert.ok(Math.abs(from.vel.x * d - expected) < 1e-9);
+    assert.ok(c.WALL_RETURN_RUN_MUL > 1 && c.WALL_RETURN_RUN_MUL < 1.25);
+  }
 });
 
 test('3-2-2 supplies a strong front pair and surrounds the receiver with forward and deeper options', () => {

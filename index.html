@@ -129,6 +129,7 @@ body.touchui #app #radar:not(.tall){top:calc(env(safe-area-inset-top,0px) + 10px
 .nameTag small{display:block;font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--chalk);text-shadow:0 1px 2px rgba(0,0,0,.8);margin-bottom:1px}
 .nameTag b{display:block;font-size:13px;font-weight:700;color:var(--chalk);background:var(--panel);border:1px solid var(--line);border-bottom:2px solid var(--tin);padding:2px 8px;border-radius:4px}
 .nameTag.cpu b{border-bottom-color:var(--t1)}
+#wallTag b{font-size:11px;border-bottom-color:#9fd0ff}
 .nameTag small[hidden]{display:none}
 
 #touch{position:absolute;inset:0;pointer-events:none}
@@ -335,6 +336,7 @@ kbd{font-family:var(--f-num);font-size:12px;font-weight:700;padding:1px 7px;bord
   <div id="nameTag" class="nameTag" hidden><small></small><b></b></div>
   <div id="cpuTag" class="nameTag cpu" hidden><small></small><b></b></div>
   <div id="crossTag" class="nameTag" hidden><b></b></div>
+  <div id="wallTag" class="nameTag" hidden><small>壁役</small><b></b></div>
   <div id="skillPop"></div>
   <div id="touch" hidden>
     <div id="stickZone"></div>
@@ -2045,6 +2047,7 @@ const throughSpeed=d=>clamp(5.5+d*.9,9,28);
 // 裏へのスルーパスは強めに蹴る：会場の転がりにくさを考え、走り込む先に8〜14m/sの速さで届く初速（最大34m/s）
 const throughRoll=d=>rollKick(d,clamp(5+d*.35,8,14),34);
 const THROUGH_RUN_MUL=1.25;
+const WALL_RETURN_RUN_MUL=1.15;
 // 裏パスが出た後、受け手の追走中だけ加速。受け取り・相手の保持・時間切れで終了する。
 function throughRunMul(p){
   if(ball.owner) return 1;
@@ -2261,6 +2264,7 @@ function wallReturn(p){
     countPass(p);
   }
   ball.wallUntil=T+f.receiveT;
+  f.throughBoostUntil=0; // 前の裏パスの加速をワンツーに重ねない。
   if(p.team===0) setActive(f);
 }
 // 3-2-2: FW の走り込む先へ浮き球。相手より先に落下地点へ着けるかで選ぶ
@@ -2324,6 +2328,7 @@ const keys={}; const btn={pass:false,shoot:false,sprint:false};
 let passHold=0, passing=false, passPlayer=null, charging=false, charge=0, chargePlayer=null, chargeHadBall=false;
 let crossHold=null;
 const crossTag=$('#crossTag');
+const wallTag=$('#wallTag');
 const passingPlayer=()=>passPlayer||active;
 const shootingPlayer=()=>chargePlayer||active;
 const defenseButtons=new Set(); let defenseHold=0;
@@ -2878,7 +2883,7 @@ function targetAttacking(p){
 function fieldAI(p,out,dt){
   const t=p.team, d=teamDir(t), o=ball.owner, sm=t===1?diff.spd:1;
   if(o===p) return ownerAI(p,out,dt);
-  if(wallReceiving(p)){ const f=intercept(p,SPRINT*sm*1.12); seek(p,f.x,f.z,SPRINT*sm*1.12,out); return; }
+  if(wallReceiving(p)){ const f=intercept(p,SPRINT*sm*WALL_RETURN_RUN_MUL); seek(p,f.x,f.z,SPRINT*sm*WALL_RETURN_RUN_MUL,out); return; }
   if(feedReceiving(p)){ const f=feedReceiveSpot(p); seek(p,f.x,f.z,SPRINT*sm*1.12,out); return; }
   // 直接FKの壁に入っている選手はその位置を守る
   const fw=restartGuard&&restartGuard.fkWall&&restartGuard.fkWall.find(w=>w.p===p);
@@ -3035,7 +3040,7 @@ function gkAI(p,out,dt){
   out.z=clamp(out.z,-RUN*.6*sm,RUN*.6*sm);
 }
 function userControl(p,out,dt){
-  if(wallReceiving(p)){ const f=intercept(p,SPRINT*1.12); seek(p,f.x,f.z,SPRINT*1.12,out); return; }
+  if(wallReceiving(p)){ const f=intercept(p,SPRINT*WALL_RETURN_RUN_MUL); seek(p,f.x,f.z,SPRINT*WALL_RETURN_RUN_MUL,out); return; }
   if(state==='play'&&wall&&wall.from===p&&teamForm[p.team]==='331'&&T<wall.until){ seek(p,wall.tx,wall.tz,SPRINT,out); return; }
   if(feedReceiving(p)){ const f=feedReceiveSpot(p); seek(p,f.x,f.z,SPRINT*1.12,out); return; }
   // 切替ボタンの長押し中はカーソル・移動入力よりボール保持者へのチャージを優先。
@@ -3417,9 +3422,16 @@ function placeTag(el,p,y,lift){
   proj.set(p.pos.x,y,p.pos.z).project(camera);
   el.style.left=((proj.x+1)/2*innerWidth)+'px'; el.style.top=((1-proj.y)/2*innerHeight-lift)+'px';
 }
+function updateWallMarker(p){
+  wallTag.hidden=!p||state!=='play'; if(wallTag.hidden) return;
+  wallTag.querySelector('b').textContent='#'+p.num+' '+p.given;
+  proj.set(p.pos.x,2.7,p.pos.z).project(camera);
+  wallTag.style.left=((proj.x+1)/2*innerWidth)+'px'; wallTag.style.top=((1-proj.y)/2*innerHeight-4)+'px';
+}
 const q0=new THREE.Quaternion(), axis=new THREE.Vector3();
 function updateVisuals(dt){
   const cine=state==='replay'||state==='card';
+  wallTag.hidden=true;
   if(STAD.wind){
     // 風下へなびかせる（強いほど速くはためく）
     const wa=Math.atan2(-wind.z,wind.x), ws=Math.hypot(wind.x,wind.z);
@@ -3452,7 +3464,7 @@ function updateVisuals(dt){
     if(p.celebrate&&state==='goal') { y=Math.abs(Math.sin(T*8+p.seed))*.55; p.armL.rotation.x=p.armR.rotation.x=-2.8; }
     const spin=p.spinT>0?p.spinDir*(1-p.spinT/.45)*Math.PI*2:0; // ルーレットの回転
     p.root.position.set(p.pos.x,y,p.pos.z); p.root.rotation.set(0,p.face+spin,rz);
-    p.rushRing.visible=(rushT[p.team]>0||throughRunMul(p)>1)&&state==='play';
+    p.rushRing.visible=(rushT[p.team]>0||throughRunMul(p)>1||wallReceiving(p))&&state==='play';
     if(p.rushRing.visible){ p.rushRing.position.set(p.pos.x,.025,p.pos.z); p.rushRing.scale.setScalar(1+Math.sin(T*9+p.seed)*.08); }
     // スピード線：一定以上の速さで走っているときだけ、速いほど長く。長さを揺らしてちらつかせる
     p.streakG.visible=p.rushRing.visible&&sp>3;
@@ -3488,13 +3500,17 @@ function updateVisuals(dt){
   cursorRing.visible=mouse.on&&mouse.inside&&state!=='menu';
   if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const p=ball.owner; const hot=p&&p.team===0&&(p===active||p.role==='GK')&&mousePassTarget(p); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
   crossTag.hidden=true;
+  let wallMate=state==='play'&&wall&&wall.from.team===0&&T<wall.until&&(!ball.owner||ball.owner===wall.to)?wall.to:null;
   if(passing&&ball.owner===passingPlayer()){
     const p=passingPlayer();
     if(p.role!=='GK'&&passHold>.22){ const pl=FORMATIONS[myForm].holdPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1);
+      if(myForm==='331') wallMate=pl.q;
       if(pl.cross){ proj.set(pl.tx,1,pl.tz).project(camera); crossTag.hidden=false; crossTag.querySelector('b').textContent=pl.crossAim; crossTag.style.left=((proj.x+1)/2*innerWidth)+'px'; crossTag.style.top=((1-proj.y)/2*innerHeight)+'px'; }
     } }
     else { throughMark.visible=false; const q=(mouse.on&&mouse.inside?mousePassTarget(p):null)||userPassTarget(false,p); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); } }
   else { targetRing.visible=false; throughMark.visible=false; }
+  if(wallMate){ targetRing.visible=true; targetRing.position.set(wallMate.pos.x,.035,wallMate.pos.z); }
+  updateWallMarker(wallMate);
   // ファーストタッチの予約中：受ける選手の前に、ボールを置く方向を◇で示す
   if(ball.touchReq&&!ball.owner&&ball.passTo===active&&state==='play'){ const d=touchDir(active);
     throughMark.visible=true; throughMark.position.set(active.pos.x+d.x*2.2,.05,active.pos.z+d.z*2.2); throughMark.rotation.z+=dt*4; throughMark.scale.set(.7,.7,1); }
@@ -3602,7 +3618,7 @@ function openReplayUI(label,tag,skip){
   $('#rpScorer').textContent=label; $('#rpTag').textContent=tag; $('#rpSkip').textContent=skip;
   speedEl.classList.remove('pop'); linesEl.classList.remove('on');
   replayUI.hidden=false; requestAnimationFrame(()=>replayUI.classList.add('on'));
-  activeRing.visible=activeArrow.visible=cpuRing.visible=cursorRing.visible=targetRing.visible=landMark.visible=false; meter.hidden=nameTag.hidden=cpuTag.hidden=true;
+  activeRing.visible=activeArrow.visible=cpuRing.visible=cursorRing.visible=targetRing.visible=landMark.visible=false; meter.hidden=nameTag.hidden=cpuTag.hidden=wallTag.hidden=true;
   confetti.visible=false; confT=0;
   if(composer){ tiltH.uniforms.h.value=6/innerWidth; tiltV.uniforms.v.value=6/innerHeight; }
   sfx.whoosh();
