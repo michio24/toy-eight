@@ -47,7 +47,7 @@ function context(names = []) {
     passingPlayer: () => c.passPlayer || c.active, shootingPlayer: () => c.chargePlayer || c.active,
     teamDir: t => t === 0 ? 1 : -1, dXZ: (a, b) => Math.hypot(a.x - b.x, a.z - b.z),
     clamp: (x, a, b) => Math.max(a, Math.min(b, x)), rnd: (a, b) => (a + b) / 2,
-    sfx: {kick() {}, bounce() {}, ooh() {}, tackle() {}, whistle() {}}, addMom() {}, skillPop() {},
+    sfx: {kick() {}, bounce() {}, ooh() {}, tackle() {}, whistle() {}}, addMom() {}, skillPop() {}, markRadarBreak() {}, recordRadarFrame() {}, startRadarSkill() {}, endRadarSkill() {},
     frameCollide() {}, inputVec: () => ({x: 0, z: 0, m: 0}), switchPlayer() {}, setActive: p => {c.active = p;},
     firstTouch: () => false, feedReceiving: () => false, wallReceiving: () => false, topSupporting: () => false, midfieldBalanced: () => false, wingAttacking: () => false, targetAttacking: () => false, goalChargeLine: () => null, ST: {passOk: [0, 0], poss: [0, 0], tackles: [0, 0]},
     userShoot: () => {c.shots = (c.shots || 0) + 1;}, userPass: () => {c.passes = (c.passes || 0) + 1;}};
@@ -59,6 +59,254 @@ function context(names = []) {
 const controls = ['canAct', 'canKick', 'press', 'release', 'cancelHolds', 'updateActionHolds'];
 
 test('inline JavaScript parses', () => new vm.Script(script));
+
+function radarContext(names = []) {
+  const c = context(['markRadarBreak', 'recordRadarFrame', 'radarSnapshotAt', 'renderRadarGoals', 'startRadarSkill', 'sampleRadarSkill', 'endRadarSkill', 'radarSkillTrailsAt', ...names]);
+  vm.runInContext(script.match(/const RADAR_SKILLS=.*;/)[0], c);
+  c.ST.goals = [];
+  Object.assign(c, {radarHistory: [[], []], radarBreak: true, radarReview: null, radarSkills: [[], []], radarSkill: null, half: 1, clock: 0, TEAMS: [{name: 'home'}, {name: 'away'}],
+    lerpAngle: (a, b, f) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * f});
+  return c;
+}
+test('radar history samples at 10 Hz, snapshots values, and excludes non-playing states', () => {
+  const c = radarContext(); c.recordRadarFrame();
+  c.active.pos.x = 8; c.clock = .4; c.recordRadarFrame();
+  assert.equal(c.radarHistory[0].length, 1); assert.equal(c.radarHistory[0][0].players[0].pos.x, 0);
+  c.clock = .8; c.recordRadarFrame(); assert.equal(c.radarHistory[0].length, 2);
+  for (const state of ['kickoff', 'goal', 'replay', 'card', 'half', 'end']) {
+    c.state = state; c.clock += 1; c.recordRadarFrame();
+  }
+  assert.equal(c.radarHistory[0].length, 2);
+  c.state = 'play'; c.half = 2; c.clock = 1200; c.markRadarBreak(); c.recordRadarFrame();
+  assert.equal(c.radarHistory[1].length, 1); assert.equal(c.radarHistory[1][0].cut, true);
+});
+test('radar interpolation respects reset cuts, facing wrap, and exact endpoints without altering players', () => {
+  const c = radarContext(); c.active.face = Math.PI - .1; c.recordRadarFrame();
+  c.clock = 8; c.active.pos.x = 10; c.active.face = -Math.PI + .1; c.recordRadarFrame();
+  const frames = c.radarHistory[0]; let s = c.radarSnapshotAt(frames, 4);
+  assert.equal(s.players[0].pos.x, 5); assert.ok(Math.abs(s.players[0].face - Math.PI) < 1e-9);
+  assert.equal(c.active.pos.x, 10); assert.equal(frames[0].players[0].pos.x, 0);
+  c.clock = 16; c.active.pos.x = -20; c.markRadarBreak(); c.recordRadarFrame();
+  assert.equal(c.radarSnapshotAt(frames, 12).players[0].pos.x, 10);
+  assert.equal(c.radarSnapshotAt(frames, 16).players[0].pos.x, -20);
+  assert.equal(c.radarSnapshotAt([], 0), null);
+});
+function reviewFixture(c) {
+  const speeds = [1, 4, 10].map(speed => ({dataset: {speed: String(speed)}, setAttribute(k, v) {this[k] = v;}}));
+  const ui = {toggle: {}, clock: {}, goals: {}, skillStatus: {}, seek: {setAttribute(k, v) {this[k] = v;}}, canvas: {clientWidth: 400, clientHeight: 285}, ctx: {}, host: {querySelectorAll: () => speeds}};
+  Object.assign(c, {window: {devicePixelRatio: 1}, renderRadar() {c.draws = (c.draws || 0) + 1;}, endReviewUI: ui});
+  return {ui, speeds};
+}
+test('radar playback defaults to 4x, pauses, changes speed, loops and suspends during highlights', () => {
+  const c = radarContext(['openRadarReview', 'updateRadarReviewControls', 'updateRadarReview']);
+  c.half = 2; c.clock = 1200; c.recordRadarFrame(); c.clock = 1216; c.recordRadarFrame();
+  const {ui, speeds} = reviewFixture(c); c.state = 'end'; c.$('#endOv').hidden = false;
+  c.openRadarReview(2, ui); assert.equal(c.radarReview.speed, 4); assert.equal(speeds[1]['aria-pressed'], 'true');
+  c.updateRadarReview(.25); assert.equal(c.radarReview.at, 1208);
+  assert.equal(ui.clock.innerHTML, '後半 <i>2</i><i>0</i>:<i>0</i><i>8</i>');
+  c.radarReview.playing = false; c.updateRadarReview(.25); assert.equal(c.radarReview.at, 1208);
+  c.radarReview.speed = 1; c.radarReview.playing = true; c.updateRadarReview(.25); assert.equal(c.radarReview.at, 1210);
+  c.radarReview.speed = 10; c.updateRadarReview(.1); assert.equal(c.radarReview.at, 1202);
+  c.paused = true; c.updateRadarReview(.1); assert.equal(c.radarReview.at, 1202); c.paused = false;
+  c.state = 'replay'; c.$('#endOv').hidden = true; c.updateRadarReview(1); assert.equal(c.radarReview.at, 1202);
+  c.state = 'end'; c.$('#endOv').hidden = false; c.openRadarReview(2, ui);
+  assert.equal(c.radarReview.at, 1202); assert.equal(c.radarReview.speed, 10);
+  c.radarReview.playing = false; c.openRadarReview(2, ui); assert.equal(c.radarReview.playing, false);
+});
+test('halftime waits for a button and advances only once with a fresh second-half kickoff', () => {
+  const c = radarContext(['step', 'showHalf', 'startSecondHalf']);
+  Object.assign(c, {state: 'half', stateT: 0, score: [2, 1], halfReviewUI: {}, updateButtonLabels() {},
+    openRadarReview(which) {c.openedHalf = which;}, updateClock() {}, resetWind() {}, resetInput() {},
+    setupKickoff(team) {c.kickoffs = (c.kickoffs || 0) + 1; c.kickTeam = team; c.state = 'kickoff';}});
+  c.$('#secondHalfBtn').focus = () => {};
+  c.step(3); c.step(3); assert.equal(c.half, 1); assert.equal(c.state, 'half');
+  assert.equal(c.$('#halfOv').hidden, false); assert.equal(c.openedHalf, 1);
+  c.startSecondHalf(); c.startSecondHalf();
+  assert.equal(c.kickoffs, 1); assert.equal(c.kickTeam, 1); assert.equal(c.half, 2); assert.equal(c.clock, 1200);
+  assert.equal(c.$('#halfOv').hidden, true); assert.equal(c.radarReview, null);
+});
+test('radar history resets both halves and review state for a fresh match or menu', () => {
+  const c = radarContext(['resetRadarHistory']); c.recordRadarFrame();
+  c.half = 2; c.clock = 1200; c.recordRadarFrame(); c.radarReview = {half: 2};
+  c.$('#halfOv').hidden = false; c.resetRadarHistory();
+  assert.equal(c.radarHistory[0].length, 0); assert.equal(c.radarHistory[1].length, 0);
+  assert.equal(c.radarReview, null); assert.equal(c.radarBreak, true); assert.equal(c.$('#halfOv').hidden, true);
+});
+test('review buttons toggle playback and speed with corresponding accessible state', () => {
+  const c = radarContext(['createRadarReview', 'openRadarReview', 'updateRadarReviewControls']);
+  const makeButton = speed => ({dataset: {speed: String(speed)}, addEventListener(k, fn) {this.click = fn;}, setAttribute(k, v) {this[k] = v;}});
+  const toggle = makeButton(0), speeds = [1, 4, 10].map(makeButton), canvas = {getContext: () => ({})}, clock = {};
+  const seek = {addEventListener() {}};
+  const host = c.$('#testReview');
+  host.querySelector = s => s === 'canvas' ? canvas : s === '.review-toggle' ? toggle : s === '.review-seek' ? seek : clock;
+  host.querySelectorAll = () => speeds;
+  const ui = c.createRadarReview('testReview', '前半のレーダー再生'); c.openRadarReview(1, ui);
+  toggle.click(); assert.equal(c.radarReview.playing, false); assert.equal(toggle.textContent, '再生');
+  speeds[2].click(); assert.equal(c.radarReview.speed, 10); assert.equal(speeds[2]['aria-pressed'], 'true');
+  assert.equal(speeds[1]['aria-pressed'], 'false');
+  toggle.click(); assert.equal(c.radarReview.playing, true); assert.equal(toggle.textContent, '一時停止');
+});
+test('radar seeking redraws the selected time, clamps endpoints and preserves playback settings', () => {
+  for (const half of [1, 2]) {
+    const c = radarContext(['openRadarReview', 'updateRadarReviewControls', 'updateRadarReview', 'seekRadarReview']);
+    c.half = half; const start = (half - 1) * 1200;
+    c.clock = start; c.recordRadarFrame(); c.clock = start + 16; c.active.pos.x = 16; c.recordRadarFrame();
+    const {ui} = reviewFixture(c); c.state = half === 1 ? 'half' : 'end';
+    c.$(half === 1 ? '#halfOv' : '#endOv').hidden = false;
+    let drawn; c.renderRadar = (canvas, ctx, players) => {drawn = players[0].pos.x;};
+    c.openRadarReview(half, ui); assert.equal(ui.seek.min, String(start)); assert.equal(ui.seek.max, String(start + 16));
+    assert.equal(ui.seek.disabled, false);
+    c.radarReview.speed = 10;
+    c.seekRadarReview(start + 8); assert.equal(drawn, 8); assert.equal(c.radarReview.at, start + 8);
+    assert.equal(ui.seek.value, String(start + 8)); assert.ok(ui.seek['aria-valuetext'].endsWith(':08'));
+    assert.equal(c.radarReview.playing, true); assert.equal(c.radarReview.speed, 10);
+    c.seekRadarReview(start + 20); assert.equal(c.radarReview.at, start + 16); assert.equal(drawn, 16);
+    c.seekRadarReview(start - 20); assert.equal(c.radarReview.at, start); assert.equal(drawn, 0);
+    c.radarReview.playing = false; c.seekRadarReview(start + 6); c.updateRadarReview(.5);
+    assert.equal(c.radarReview.at, start + 6); assert.equal(c.radarReview.playing, false);
+    c.radarReview.playing = true; c.radarReview.seeking = true; c.updateRadarReview(.5);
+    assert.equal(c.radarReview.at, start + 6);
+    c.radarReview.seeking = false; c.updateRadarReview(.1); assert.equal(c.radarReview.at, start + 14);
+    c.seekRadarReview(NaN); assert.equal(c.radarReview.at, start + 14);
+  }
+});
+test('slider input and pointer cancellation release seeking without changing the pause state', () => {
+  const c = radarContext(['createRadarReview', 'openRadarReview', 'updateRadarReviewControls']);
+  const {ui: fixture} = reviewFixture(c), handlers = {};
+  const seek = {value: '8', addEventListener(k, fn) {handlers[k] = fn;}, setPointerCapture() {}};
+  const toggle = {addEventListener() {}}, host = c.$('#seekReview');
+  host.querySelector = s => s === 'canvas' ? {getContext: () => ({})} : s === '.review-toggle' ? toggle : s === '.review-seek' ? seek : {};
+  host.querySelectorAll = () => [];
+  c.seekRadarReview = at => {c.seeked = at;};
+  const ui = c.createRadarReview('seekReview', '前半のレーダー再生'); c.openRadarReview(1, ui);
+  assert.equal(seek.disabled, true);
+  for (const playing of [true, false]) for (const release of ['pointerup', 'pointercancel', 'lostpointercapture', 'change', 'blur']) {
+    c.radarReview.playing = playing; handlers.pointerdown({pointerId: 1}); assert.equal(c.radarReview.seeking, true);
+    seek.value = '8'; handlers.input(); assert.equal(c.seeked, 8);
+    handlers[release](); assert.equal(c.radarReview.seeking, false); assert.equal(c.radarReview.playing, playing);
+  }
+  c.radarReview.ui = fixture; c.seeked = null; handlers.input(); assert.equal(c.seeked, null);
+});
+test('goal markers use exact times in the correct half and let either team goal be sought', () => {
+  const c = radarContext(); c.TEAMS = [{name: 'ブリキFC'}, {name: 'CPU'}];
+  c.document.createElement = () => ({style: {}, setAttribute(k, v) {this[k] = v;}, addEventListener(k, fn) {this[k] = fn;}});
+  c.ST.goals = [
+    {half: 1, clock: 300.5, team: 0, name: 'A'}, {half: 1, clock: 1200, team: 1, name: 'オウンゴール'},
+    {half: 2, clock: 1200, team: 0, name: 'B'}, {half: 2, clock: 1500.25, team: 1, name: 'C'},
+    {half: 2, clock: 2400, team: 0, name: 'D'}
+  ];
+  const marks = [], ui = {seek: {min: '0', max: '1200'}, goals: {appendChild(mark) {marks.push(mark);}}};
+  c.radarReview = {ui,playing: false,speed: 4}; c.seekRadarReview = at => {c.seeked = at;};
+  c.renderRadarGoals(1, ui); assert.equal(marks.length, 2); assert.equal(ui.goals.hidden, false);
+  assert.equal(parseFloat(marks[0].style.left), 300.5 / 1200 * 100);
+  assert.equal(marks[1].style.left, '100%'); assert.ok(marks[1].title.includes('オウンゴール'));
+  assert.ok(marks[0]['aria-label'].includes('前半 05:00')); marks[0].click(); assert.equal(c.seeked, 300.5);
+  assert.equal(c.radarReview.playing, false); assert.equal(c.radarReview.speed, 4);
+  marks.length = 0; ui.seek.min = '1200'; ui.seek.max = '2400'; c.renderRadarGoals(2, ui);
+  assert.equal(marks.length, 3); assert.equal(marks[0].style.left, '0%'); assert.equal(marks[2].style.left, '100%');
+  assert.ok(marks[1].className.includes('foe')); assert.ok(marks[1].title.includes('後半 25:00 CPU'));
+  marks[1].click(); assert.equal(c.seeked, 1500.25);
+  marks.length = 0; c.ST.goals = []; c.renderRadarGoals(2, ui); assert.equal(ui.goals.hidden, true); assert.equal(marks.length, 0);
+});
+test('special passes record both teams and distinguish the two legs of a one-two', () => {
+  for (const team of [0, 1]) for (const kind of ['wall', 'through', 'feed', 'cross']) {
+    const c = radarContext(['kick', 'throughPass', 'wallPass', 'wallReturn', 'longFeed']);
+    const p = player(team), q = player(team, 'FW'); c.players = [p, q]; c.active = p; c.ball.owner = p;
+    q.pos.set(10, 0, 2); c.countPass = () => {}; c.banner = () => {};
+    c.throughRoll = () => ({v: 20, t: 1}); c.throughSpeed = () => 20;
+    c.longFeedTime = () => 1; c.crossRuns = () => {}; c.landTime = () => 1;
+    c.passTo = (a, b) => {c.kick(a, 1, 0, 20, .12); c.ball.passTo = b; b.receiveT = 2;};
+    const plan = {q, tx: 10, tz: 2, cross: kind === 'cross'};
+    if(kind === 'wall') c.wallPass(p, q, 10, 2);
+    else if(kind === 'feed') c.longFeed(p, plan);
+    else c.throughPass(p, plan);
+    assert.equal(c.radarSkill.kind, kind); assert.equal(c.radarSkill.team, team);
+    assert.equal(c.radarSkills[0].length, 1); assert.equal(c.radarSkills[1].length, 0);
+    if(kind === 'wall') {
+      c.clock = 8; c.ball.pos.set(10, .21, 2); c.ball.owner = q; c.wallReturn(q);
+      assert.equal(c.radarSkills[0].length, 2); assert.equal(c.radarSkills[0][0].end, 8);
+      assert.equal(c.radarSkill.kind, 'wallReturn'); assert.equal(c.radarSkill.team, team);
+    }
+  }
+});
+test('skill trails end at reception, another kick or a restart and reset between matches', () => {
+  const c = radarContext(['kick', 'resetRadarHistory']); c.ball.owner = null;
+  c.startRadarSkill('through', c.active);
+  c.clock = .4; c.ball.pos.x = 2; c.recordRadarFrame(); assert.equal(c.radarSkill.points.length, 1);
+  c.clock = .8; c.ball.pos.x = 4; c.recordRadarFrame(); assert.equal(c.radarSkill.points.length, 2);
+  c.clock = 1; c.ball.pos.x = 5; c.ball.owner = c.active; c.recordRadarFrame();
+  assert.equal(c.radarSkill, null); assert.equal(c.radarSkills[0][0].end, 1);
+  assert.equal(c.radarSkills[0][0].points.at(-1).x, 5);
+  c.ball.owner = null; c.startRadarSkill('cross', c.active); c.clock = 2; c.ball.pos.x = 6;
+  c.kick(c.active, 1, 0, 20, .1); assert.equal(c.radarSkill, null); assert.equal(c.radarSkills[0][1].end, 2);
+  c.startRadarSkill('feed', c.active); c.clock = 3; c.ball.pos.x = 100; c.markRadarBreak();
+  assert.equal(c.radarSkill, null); assert.equal(c.radarSkills[0][2].points.at(-1).x, 6);
+  c.half = 2; c.clock = 1200; c.startRadarSkill('wall', c.active); assert.equal(c.radarSkills[1].length, 1);
+  c.resetRadarHistory(); assert.equal(c.radarSkills[0].length, 0); assert.equal(c.radarSkills[1].length, 0); assert.equal(c.radarSkill, null);
+});
+test('skill trail seeking only reveals the travelled path, fades after reception and restores labels', () => {
+  const c = radarContext(['openRadarReview', 'updateRadarReviewControls', 'updateRadarReview', 'seekRadarReview']);
+  c.ball.owner = null; c.recordRadarFrame(); c.startRadarSkill('feed', c.active);
+  c.clock = 8; c.ball.pos.x = 10; c.recordRadarFrame(); c.clock = 16; c.ball.pos.x = 20; c.ball.owner = c.active; c.recordRadarFrame();
+  c.clock = 80; c.recordRadarFrame();
+  assert.equal(c.radarSkillTrailsAt(1, -1).length, 0); assert.equal(c.radarSkillTrailsAt(2, 8).length, 0);
+  const partial = c.radarSkillTrailsAt(1, 4)[0]; assert.equal(partial.points.at(-1).x, 5); assert.equal(partial.alpha, 1);
+  assert.equal(c.radarSkillTrailsAt(1, 26)[0].alpha, .5); assert.equal(c.radarSkillTrailsAt(1, 37).length, 0);
+  const {ui} = reviewFixture(c); c.state = 'half'; c.$('#halfOv').hidden = false; c.openRadarReview(1, ui);
+  let trails; c.renderRadar = (...args) => {trails = args[9];};
+  c.seekRadarReview(8); assert.equal(trails[0].kind, 'feed'); assert.equal(ui.skillStatus.textContent, 'home：ロングフィード');
+  c.seekRadarReview(70); assert.equal(trails.length, 0); assert.equal(ui.skillStatus.textContent, '');
+  c.seekRadarReview(4); assert.equal(trails[0].points.at(-1).x, 5); assert.equal(ui.skillStatus.textContent, 'home：ロングフィード');
+});
+test('skill trail drawing uses distinct colours, dashes and directional arrowheads', () => {
+  const c = radarContext(['drawRadarTrails']); const calls = [], g = {};
+  for(const name of ['save', 'restore', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'closePath', 'fill', 'setLineDash']) {
+    g[name] = (...args) => {calls.push({name, args, color: g.strokeStyle});};
+  }
+  const kinds = ['wall', 'through', 'feed', 'cross'];
+  c.drawRadarTrails(g, (x, z) => [x, z], kinds.map(kind => ({kind, alpha: 1, points: [{x: 0, z: 0}, {x: 10, z: 4}]})));
+  assert.equal(new Set(calls.filter(x => x.name === 'stroke').map(x => x.color)).size, 4);
+  assert.equal(calls.filter(x => x.name === 'fill').length, 4);
+  assert.ok(calls.some(x => x.name === 'setLineDash' && x.args[0].length));
+  assert.equal(calls[0].name, 'save'); assert.equal(calls.at(-1).name, 'restore');
+});
+test('match finish opens second-half radar review and retains stats and highlight-return state', () => {
+  const c = radarContext(['showEnd', 'openRadarReview', 'updateRadarReviewControls', 'endHighlights']);
+  const {ui} = reviewFixture(c);
+  Object.assign(c, {score: [1, 0], TEAMS: [{name: 'home'}, {name: 'away'}], stylePts: 0,
+    flushHighlights(force) {c.flushed = force;}, renderStats() {c.statsRendered = true;}, live: {}, HLS: {}});
+  c.$('#hlBtn').focus = () => {};
+  c.showEnd(); assert.equal(c.radarReview.half, 2); assert.equal(c.flushed, true); assert.equal(c.statsRendered, true);
+  assert.equal(c.$('#endOv').hidden, false); assert.equal(c.$('#finalScore').textContent, '1 - 0');
+  c.radarReview.at = 1232; c.radarReview.speed = 10; c.radarReview.playing = false;
+  c.state = 'replay'; c.$('#endOv').hidden = true; c.endHighlights();
+  assert.equal(c.radarReview.ui, ui); assert.equal(c.radarReview.at, 1232);
+  assert.equal(c.radarReview.speed, 10); assert.equal(c.radarReview.playing, false); assert.equal(c.state, 'end');
+});
+test('half and full-time boundaries capture the final frame and stop at the half clock limit', () => {
+  for (const half of [1, 2]) {
+    const c = radarContext(['step']);
+    Object.assign(c, {half, clock: half * 1200 - .05, score: [0, 0],
+      updateDefenseHold() {}, updateActionHolds() {}, updateClock() {}, resetInput() {}, banner() {}});
+    c.step(.02);
+    assert.equal(c.clock, half * 1200); assert.equal(c.state, half === 1 ? 'half' : 'end');
+    assert.equal(c.radarHistory[half - 1].at(-1).clock, half * 1200);
+    assert.equal(c.radarHistory[2 - half].length, 0);
+  }
+});
+test('shared radar renderer supports desktop and narrow viewports without changing replay positions', () => {
+  const c = radarContext(['renderRadar']); c.recordRadarFrame(); const s = c.radarHistory[0][0];
+  c.RC = {pitch: '#000', stripe: '#111', line: '#fff', t0: '#00f', t0e: '#fff', me: '#ff0', ball: '#fff'};
+  const calls = [], g = {};
+  for (const name of ['setTransform', 'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'arc', 'fill', 'closePath']) {
+    g[name] = (...args) => {for (const n of args) if (typeof n === 'number') assert.ok(Number.isFinite(n)); calls.push(name);};
+  }
+  for (const [w, h, tall] of [[600, 428, false], [260, 186, false], [140, 196, true]]) {
+    const canvas = {}; c.renderRadar(canvas, g, s.players, s.ball, s.players[0], tall, w, h, 2);
+    assert.equal(canvas.width, w * 2); assert.equal(canvas.height, h * 2);
+  }
+  assert.ok(calls.includes('arc')); assert.equal(s.players[0].pos.x, 0); assert.equal(c.active.pos.x, 0);
+});
 test('through receivers accelerate only after the pass and stop on reception, turnover or expiry', () => {
   const c = context(['throughRunMul']), p = c.active, carrier = player(), opponent = player(1);
   p.runUntil = c.T + 2; c.ball.owner = carrier;
@@ -721,7 +969,7 @@ test('20 FPS update subdivides fast ball pickups that would otherwise skip a rec
   c.ball.pos.set(-.875, .21, 0); c.ball.vel.set(35, 0, 0); c.last = 0; c.hitStop = c.slowT = 0;
   const steps = [];
   c.step = dt => {steps.push(dt); if (!c.ball.owner) {c.updateBall(dt); c.tryPickup();}};
-  for (const n of ['requestAnimationFrame', 'updateVisuals', 'recordFrame', 'updateCamera', 'updateMouseWorld', 'drawRadar', 'drawMomentum', 'drawWind']) c[n] = () => {};
+  for (const n of ['requestAnimationFrame', 'updateVisuals', 'recordFrame', 'updateCamera', 'updateMouseWorld', 'drawRadar', 'updateRadarReview', 'drawMomentum', 'drawWind']) c[n] = () => {};
   c.hlPend = []; c.composer = null; c.renderer = {render() {}}; c.camera = {}; c.scene = {};
   c.frame(50); assert.equal(c.ball.owner, c.active); assert.equal(steps.length, 3);
   assert.ok(steps.every(t => t <= 1 / 60));
