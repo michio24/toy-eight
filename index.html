@@ -1831,6 +1831,8 @@ function kick(p,ux,uz,v,vy){
   ball.lastTouch=p.team; ball.shot++; ball.passTo=null; ball.kickT=T; ball.kickTeam=p.team; ball.shotInfo=null;
   ball.kicker=p; ball.kickX=p.pos.x; ball.curve=0; ball.grav=0; ball.passBy=null;
   ball.perfect=false; ball.cross=ball.touchBy=null; ball.touchReq=0;
+  ball.gkReactUntil=0;
+  ball.gkRunUntil=0;
   kickoffGuard=false; restartGuard=null;
   sfx.kick(Math.min(1,v/30));
 }
@@ -1900,6 +1902,8 @@ function longKick(p,gx,gz,c,pl=null){
   const dx=gx-ball.pos.x, dz=gz-ball.pos.z, d=Math.hypot(dx,dz)||1;
   const t=1.6+c*.6, range=pl?d/(1-.025*t):24+c*22;
   kick(p,dx/d,dz/d,range/t,(4.905*t*t-(ball.pos.y-BR))/t);
+  ball.gkReactUntil=T+.75;
+  ball.gkRunUntil=T+t+.6;
   if(pl){ const q=pl.q; ball.passTo=q; q.receiveT=t+1.5; countPass(p); if(p.team===0) setActive(q); }
   if(p.team===0) banner('ロングキック','',700);
 }
@@ -2653,12 +2657,17 @@ function tackleCheck(p){
 
 // ---------- AI ----------
 const roles=[{},{}];
+// GKのロングキックは、相手が軌道を見てから落下点への追走を始める。
+const waitingForGkKick=t=>!ball.owner&&ball.kicker&&ball.kicker.team!==t&&T<ball.gkReactUntil;
+// 味方FWは、GKのロングキックの落下点へすぐにダッシュする。
+const gkForwardSpot=p=>!ball.owner&&ball.kicker&&ball.kicker.team===p.team&&p.role==='FW'&&T<ball.gkRunUntil?ballFuture(landTime()):null;
 function computeRoles(){
   const o=ball.owner;
   for(let t=0;t<2;t++){
     const R=roles[t]; R.chaser=R.presser=R.cover=null;
     const list=players.filter(p=>p.team===t&&p.role!=='GK'&&p.stunT<=0);
     if(!o){
+      if(waitingForGkKick(t)) continue;
       let bt=1e9; for(const p of list){ const f=intercept(p); const tt=Math.hypot(f.x-p.pos.x,f.z-p.pos.z); if(tt<bt){bt=tt;R.chaser=p;} }
     } else if(o.team!==t){
       const s=list.map(p=>[p,dXZ(p.pos,o.pos)]).sort((a,b)=>a[1]-b[1]);
@@ -2708,6 +2717,9 @@ function fieldAI(p,out,dt){
   // 直接FKの壁に入っている選手はその位置を守る
   const fw=restartGuard&&restartGuard.fkWall&&restartGuard.fkWall.find(w=>w.p===p);
   if(fw){ seek(p,fw.x,fw.z,RUN,out); return; }
+  if(waitingForGkKick(t)){ const f=formTarget(p); seek(p,f.x,f.z,RUN*.8*sm,out); return; }
+  const gkSpot=gkForwardSpot(p);
+  if(gkSpot){ seek(p,gkSpot.x,gkSpot.z,SPRINT*sm,out); return; }
   if(wall&&wall.from===p){ seek(p,wall.tx,wall.tz,SPRINT*sm,out); return; }
   if(p.receiveT>0&&!o){ const f=crossSpot(p)||intercept(p,SPRINT); seek(p,f.x,f.z,SPRINT*sm,out); return; }
   // クロスに合わせてゴール前へ走り込む（誰かがボールを持ったら終了）
@@ -2735,6 +2747,8 @@ function fieldAI(p,out,dt){
 function ownerAI(p,out,dt){
   const t=p.team, d=teamDir(t), gx=HL*d, sm=t===1?diff.spd:1;
   out.set(0,0,0);
+  // プレイヤー側GKは、キャッチ後もゴールキック時もシュート操作を待つ。
+  if(t===0&&p.role==='GK'){ p.face=lerpAngle(p.face,d>0?Math.PI/2:-Math.PI/2,.1); return; }
   if(p.locked){
     p.aiT-=dt;
     if(p.aiT<=0){
@@ -2803,7 +2817,7 @@ function gkAI(p,out,dt){
     if(r<7){ tx=o.pos.x+(gx-o.pos.x)*.4; tz=o.pos.z*.6; spd=SPRINT*sm; }
     if(r<1.4&&!o.locked&&o.evadeT<=0&&p.fooledT<=0&&Math.random()<1.4*dt*(t===1?diff.gk:1)){ ball.owner=p; p.holdT=rnd(2,3); o.stunT=.5; ball.lastTouch=t; sfx.catch(); }
   }
-  if(!o&&bdx<10&&Math.abs(ball.pos.z)<11){
+  if(!o&&!waitingForGkKick(t)&&bdx<10&&Math.abs(ball.pos.z)<11){
     let od=99; for(const q of players) if(q.team!==t) od=Math.min(od,dXZ(q.pos,ball.pos));
     if(dXZ(p.pos,ball.pos)<od+1){ const f=intercept(p,SPRINT); tx=f.x; tz=f.z; spd=SPRINT*sm; }
   }
@@ -2830,6 +2844,8 @@ function userControl(p,out,dt){
     return;
   }
   // intended receiver runs onto the pass automatically
+  const gkSpot=gkForwardSpot(p);
+  if(gkSpot){ seek(p,gkSpot.x,gkSpot.z,SPRINT,out); return; }
   if(!ball.owner&&ball.passTo===p&&p.receiveT>0){ const f=crossSpot(p)||intercept(p,SPRINT); seek(p,f.x,f.z,SPRINT,out); return; }
   const i=inputVec(); const has=ball.owner===p;
   // ワンツーの出し手：入力がなければ予定地点へ自動でダッシュ、入力中も全力で走る
