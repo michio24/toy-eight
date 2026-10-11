@@ -786,6 +786,69 @@ test('3-2-2 supplies a strong front pair and surrounds the receiver with forward
   }
 });
 
+test('3-2-2 forwards sprint into the opposing half for a forward-facing DF feed', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) {
+    const c = context(['targetAttacking', 'formTarget', 'fieldAI', 'guard', 'seek', 'feedPlan', 'longFeedTime']);
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection; c.teamForm = ['322', '322'];
+    c.longLoftTime = distance => c.clamp(.55 + distance * .028, .75, 1.5);
+    const d = c.teamDir(team), df = player(team, 'DF');
+    df.pos.x = -20 * d; df.face = d * Math.PI / 2;
+    const forwards = [-5, 5].map(z => {
+      const p = player(team, 'FW'); p.base = {x: -3, z}; p.seed = 0;
+      p.pos.set(-3 * d, 0, z * d); p.nextRunT = c.T + 99; return p;
+    });
+    c.players = [df, ...forwards]; c.ball.owner = df; c.ball.pos.set(df.pos.x, .21, 0);
+    c.waitingForGkKick = () => false; c.gkForwardSpot = () => null;
+    for (const fw of forwards) {
+      const f = c.formTarget(fw), out = new Vector();
+      assert.equal(f.x * d, 8); assert.equal(f.z * d, fw.base.z * .8);
+      c.fieldAI(fw, out, 1 / 60);
+      assert.ok(out.x * d > 0 && Math.abs(out.length() - c.SPRINT) < 1e-9);
+      fw.pos.set(f.x, 0, f.z);
+    }
+    const plan = c.feedPlan(df);
+    assert.ok(plan && plan.tx * d >= 8 && plan.dist >= 16 && plan.dist <= 46);
+    df.face = -d * Math.PI / 2;
+    assert.equal(c.formTarget(forwards[0]).x * d, -3, 'backward-facing DF ends the feed request');
+    df.face = 0;
+    assert.equal(c.formTarget(forwards[0]).x * d, -3, 'sideways-facing DF does not trigger the run');
+    df.face = d * Math.PI / 2; df.role = 'MF';
+    assert.equal(c.formTarget(forwards[0]).x * d, -3, 'midfield possession keeps normal support');
+    df.role = 'DF'; c.teamForm[team] = '331';
+    assert.ok(c.formTarget(forwards[0]).x * d < 0, 'other formations keep their positioning');
+    c.teamForm[team] = '322'; df.locked = true;
+    assert.ok(c.formTarget(forwards[0]).x * d < 0, 'restarts do not trigger the run');
+    df.locked = false; c.ball.owner = player(1 - team);
+    assert.ok(c.formTarget(forwards[0]).x * d < 0, 'turnover restores defensive positioning');
+  }
+});
+
+test('3-2-2 DF feeds reach the opposing half even while the FW starts his run', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) for (const fwX of [-3, 12]) {
+    const c = context(['feedPlan', 'kick', 'longFeedTime', 'longFeed', 'updateBall']);
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection; c.teamForm = ['322', '322'];
+    c.longLoftTime = distance => c.clamp(.55 + distance * .028, .75, 1.5);
+    c.countPass = c.banner = () => {};
+    const d = c.teamDir(team), df = player(team, 'DF'), fw = player(team, 'FW');
+    df.pos.set(-24 * d, 0, -10 * d); fw.pos.set(fwX * d, 0, 5 * d);
+    c.players = [df, fw]; c.ball.owner = df; c.ball.pos.set(df.pos.x, 1.05, df.pos.z);
+    const plan = c.feedPlan(df, 0, 0, {x: df.pos.x, z: df.pos.z});
+    assert.ok(plan && plan.tx * d >= 8 - 1e-9, 'DF targets the opposing half despite a short cursor aim');
+    assert.ok(plan.tx * d >= fw.pos.x * d, 'feed reaches the FW rather than falling behind him');
+    c.longFeed(df, plan);
+    const flight = c.longFeedTime(plan.dist), step = 1 / 240;
+    assert.ok(Math.hypot(c.ball.vel.x, c.ball.vel.z) > plan.dist / flight, 'kick power covers the full distance with air resistance');
+    let elapsed = 0;
+    while (elapsed + step < flight) {c.updateBall(step); elapsed += step;}
+    c.updateBall(flight - elapsed);
+    assert.ok(c.dXZ(c.ball.pos, {x: plan.tx, z: plan.tz}) < .15, 'feed lands at the planned FW receiving spot');
+    assert.ok(c.ball.pos.y <= c.BR + .01);
+    df.role = 'MF'; fw.pos.x = -3 * d;
+    const short = c.feedPlan(df, 0, 0, {x: df.pos.x, z: df.pos.z});
+    assert.ok(short.tx * d < 0, 'midfield keeps the existing short feed option');
+  }
+});
+
 test('3-2-2 gives FW passing preference without overriding an explicit direction', () => {
   const c = context(['bestPassTarget']), p = c.active, fw = player(0, 'FW'), mid = player();
   fw.pos.set(10, 0, 8); mid.pos.set(10, 0, 0); c.players = [p, mid, fw]; c.teamForm[0] = '322';
