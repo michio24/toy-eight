@@ -2287,7 +2287,8 @@ function intercept(p,spd=7.5){ const tmin=landTime()*.9; let t=tmin,f=ballFuture
 
 // ---------- input ----------
 const keys={}; const btn={pass:false,shoot:false,sprint:false};
-let passHold=0, passing=false, charging=false, charge=0, chargeKeeper=null;
+let passHold=0, passing=false, passKeeper=null, charging=false, charge=0, chargeKeeper=null;
+const passingPlayer=()=>passKeeper||active;
 const shootingPlayer=()=>chargeKeeper||active;
 const defenseButtons=new Set(); let defenseHold=0;
 function defenseCharging(){
@@ -2310,10 +2311,10 @@ function updateMouseWorld(){
   if(mRay.ray.intersectPlane(mPlane,mHit)){ mouse.x=clamp(mHit.x,-HL-2,HL+2); mouse.z=clamp(mHit.z,-HW-1.5,HW+1.5); }
 }
 const mouseDist=()=>active?Math.hypot(mouse.x-active.pos.x,mouse.z-active.pos.z):0;
-function inputVec(){
-  if(mouse.on&&active){
+function inputVec(p=active){
+  if(mouse.on&&p){
     if(!mouse.inside) return {x:0,z:0,m:0};
-    const dx=mouse.x-active.pos.x, dz=mouse.z-active.pos.z, d=Math.hypot(dx,dz);
+    const dx=mouse.x-p.pos.x, dz=mouse.z-p.pos.z, d=Math.hypot(dx,dz);
     return d>.01?{x:dx/d,z:dz/d,m:clamp((d-.5)/1.2,0,1)}:{x:0,z:0,m:0};
   }
   let x=0,y=0;
@@ -2359,7 +2360,9 @@ function press(b){
     defenseButtons.add(b); switchPlayer(); return;
   }
   if(b==='pass'){
-    if(o===active){ passing=true; passHold=0; }
+    passKeeper=null;
+    if(o&&o.team===0&&o.role==='GK'){ passKeeper=o; passing=true; passHold=0; }
+    else if(o===active){ passing=true; passHold=0; }
     else if(wall&&o&&o===wall.to&&wall.from===active&&!o.locked) wallReturn(o); // 走り込みを待つ壁役にすぐ返させる
   } else if(b==='shoot'){
     chargeKeeper=null;
@@ -2374,33 +2377,35 @@ function release(b){
   btn[b]=false;
   defenseButtons.delete(b); if(!defenseButtons.size) defenseHold=0;
   if(b==='pass'&&passing){ passing=false; targetRing.visible=false; throughMark.visible=false;
-    if(canAct()&&ball.owner===active){
+    const p=passingPlayer();
+    if(canAct()&&ball.owner===p){
       // 長押しはフォーメーションごとの特殊パス。成立しなければ通常パス
-      const F=FORMATIONS[myForm], pl=passHold>.22?F.holdPlan():null;
-      if(pl) F.holdKick(active,pl); else userPass(false); } }
+      const F=FORMATIONS[myForm], pl=p.role!=='GK'&&passHold>.22?F.holdPlan():null;
+      if(pl) F.holdKick(active,pl); else userPass(false,p); }
+    passKeeper=null; }
   if(b==='shoot'&&charging){ charging=false; $('#meter').hidden=true; if(canAct()&&ball.owner===shootingPlayer()) userShoot(Math.max(.15,charge)); chargeKeeper=null; }
 }
 // プレーが止まったら押しっぱなしのパス・シュートを取り消す（離して押し直すまで発動しない）
-function cancelHolds(){ passing=charging=false; chargeKeeper=null; charge=passHold=defenseHold=0; defenseButtons.clear(); meter.hidden=true; targetRing.visible=throughMark.visible=false; }
-function userDir(){ const i=inputVec(); return i.m>.2?{x:i.x,z:i.z}:{x:Math.sin(active.face),z:Math.cos(active.face)}; }
-function userPassTarget(loft){
-  const i=inputVec();
-  if(i.m>.2) return bestPassTarget(active,{x:i.x,z:i.z},loft)||bestPassTarget(active,null,loft);
-  return bestPassTarget(active,null,loft)||bestPassTarget(active,userDir(),loft);
+function cancelHolds(){ passing=charging=false; passKeeper=chargeKeeper=null; charge=passHold=defenseHold=0; defenseButtons.clear(); meter.hidden=true; targetRing.visible=throughMark.visible=false; }
+function userDir(p=active){ const i=inputVec(p); return i.m>.2?{x:i.x,z:i.z}:{x:Math.sin(p.face),z:Math.cos(p.face)}; }
+function userPassTarget(loft,p=active){
+  const i=inputVec(p);
+  if(i.m>.2) return bestPassTarget(p,{x:i.x,z:i.z},loft)||bestPassTarget(p,null,loft);
+  return bestPassTarget(p,null,loft)||bestPassTarget(p,userDir(p),loft);
 }
-function mousePassTarget(){
+function mousePassTarget(p=active){
   // a teammate under (or near) the cursor gets the ball directly
   let best=null,bd=3.5;
-  for(const q of players){ if(q.team!==0||q===active) continue; const d=Math.hypot(q.pos.x-mouse.x,q.pos.z-mouse.z); if(d<bd){bd=d;best=q;} }
+  for(const q of players){ if(q.team!==0||q===p) continue; const d=Math.hypot(q.pos.x-mouse.x,q.pos.z-mouse.z); if(d<bd){bd=d;best=q;} }
   return best;
 }
-function userPass(loft){
-  const dir=userDir();
-  const mq=mouse.on&&mouse.inside?mousePassTarget():null;
-  const q=mq||userPassTarget(loft);
-  if(q) passTo(active,q,loft||autoLoft(active,q)); // 前線への長いパス・相手越しのパスは自動でフライに
-  else if(mouse.on&&mouse.inside){ const d=Math.max(4,mouseDist()); if(loft){ const t=loftTime(d); kick(active,dir.x,dir.z,d*.94/t,4.905*t); } else kick(active,dir.x,dir.z,groundPassSpeed(d),.15); }
-  else { if(loft) kick(active,dir.x,dir.z,16,6); else kick(active,dir.x,dir.z,13,.15); }
+function userPass(loft,p=active){
+  const dir=userDir(p);
+  const mq=mouse.on&&mouse.inside?mousePassTarget(p):null;
+  const q=mq||userPassTarget(loft,p);
+  if(q) passTo(p,q,loft||autoLoft(p,q)); // 前線への長いパス・相手越しのパスは自動でフライに
+  else if(mouse.on&&mouse.inside){ const d=Math.max(4,Math.hypot(mouse.x-p.pos.x,mouse.z-p.pos.z)); if(loft){ const t=loftTime(d); kick(p,dir.x,dir.z,d*.94/t,4.905*t); } else kick(p,dir.x,dir.z,groundPassSpeed(d),.15); }
+  else { if(loft) kick(p,dir.x,dir.z,16,6); else kick(p,dir.x,dir.z,13,.15); }
 }
 // シュートの狙い（ブレを含まない）。PK・FKのプレビュー表示にも使う
 function userAimZ(){
@@ -2802,6 +2807,28 @@ function ownerAI(p,out,dt){
   const s=(od<3?SPRINT*.88:RUN*.9)*sm;
   out.set(dx*s,0,dz*s);
 }
+// GKの守備ラインに届く軌道を、ボール更新と同じ順序で予測する。
+function gkShotArrival(xl,d){
+  let x=ball.pos.x,y=ball.pos.y,z=ball.pos.z,vx=ball.vel.x,vy=ball.vel.y,vz=ball.vel.z;
+  let curve=ball.curve, grav=ball.grav;
+  const h=1/120;
+  for(let i=0;i<216;i++){
+    const px=x, py=y, pz=z;
+    vy-=(grav||9.81)*h;
+    if(curve){ const w=curve*h, ux=vx; vx-=vz*w; vz+=ux*w; }
+    if(STAD.wind){ const k=y>BR+.05?.4:.06; vx+=wind.x*k*h; vz+=wind.z*k*h; }
+    x+=vx*h; y+=vy*h; z+=vz*h;
+    if((px-xl)*d>=0&&(x-xl)*d<=0){
+      const f=(xl-px)/(x-px);
+      return {t:(i+f)*h,z:pz+(z-pz)*f,y:py+(y-py)*f};
+    }
+    if(y<BR){ y=BR; curve=grav=0; if(vy<-1.5){ vy*=-STAD.bounce; vx*=.9; vz*=.9; } else vy=0; }
+    const hs=Math.hypot(vx,vz);
+    if(hs>0){ const ground=y<=BR+.01&&Math.abs(vy)<.01;
+      const ns=Math.max(0,ground?hs*Math.exp(-STAD.rollK*h)-STAD.rollC*h:hs*(1-.05*h)); vx*=ns/hs; vz*=ns/hs; }
+  }
+  return null;
+}
 function gkAI(p,out,dt){
   if(ball.owner===p) return ownerAI(p,out,dt);
   const t=p.team, d=teamDir(t), gx=-HL*d, sm=(t===1?diff.spd:1);
@@ -2822,12 +2849,12 @@ function gkAI(p,out,dt){
     if(dXZ(p.pos,ball.pos)<od+1){ const f=intercept(p,SPRINT); tx=f.x; tz=f.z; spd=SPRINT*sm; }
   }
   if(!o&&ball.vel.x*d<-5){
-    const xl=gx+d*.8, tt=(xl-ball.pos.x)/ball.vel.x;
-    if(tt>0&&tt<1.4){
-      const zc=ball.pos.z+ball.vel.z*tt;
-      if(Math.abs(zc)<GW+1.2){
+    const xl=gx+d*.9, arrival=gkShotArrival(xl,d);
+    if(arrival&&arrival.t>0){
+      const tt=arrival.t, zc=arrival.z;
+      if(Math.abs(zc)<GW+1.2&&arrival.y<GH+BR){
         tz=clamp(zc,-GW,GW); tx=gx+d*.9; spd=SPRINT*1.1*sm;
-        if(Math.abs(zc-p.pos.z)>.9&&tt<.55){ p.diveT=.6; p.diveDir=Math.sign(zc-p.pos.z); p.vel.z=clamp((zc-p.pos.z)/Math.max(tt,.2),-9,9); p.vel.x*=.3; return 'nosteer'; }
+        if(Math.abs(zc-p.pos.z)>.9&&tt<.32&&Math.abs(p.pos.x-xl)<1.3){ p.diveT=.6; p.diveDir=Math.sign(zc-p.pos.z); p.vel.z=clamp((zc-p.pos.z)*2.2/(1-Math.exp(-2.2*Math.max(tt,.08))),-10.5,10.5); p.vel.x*=.3; return 'nosteer'; }
       }
     }
   }
@@ -2975,7 +3002,7 @@ function gkCheck(){
     if(p.pickupCD>0||p.stunT>0) continue;
     const d=teamDir(p.team), gx=-HL*d, bdx=(ball.pos.x-gx)*d;
     if(bdx>12.5||bdx<-1.5||Math.abs(ball.pos.z)>10.5) continue;
-    const cy=p.diveT>0?.8:1.1, r=p.diveT>0?1.4:.95;
+    const cy=p.diveT>0?1.15:1.1, r=p.diveT>0?1.45:.95;
     const dist=Math.hypot(ball.pos.x-p.pos.x,ball.pos.y-cy,ball.pos.z-p.pos.z);
     if(dist>r||ball.pos.y>2.7) continue;
     const sp=ball.vel.length();
@@ -3260,10 +3287,11 @@ function updateVisuals(dt){
   cpuRing.visible=!!co&&state==='play'; if(co) cpuRing.position.set(co.pos.x,.03,co.pos.z);
   placeTag(cpuTag,cpuRing.visible?co:null,2.6,4); // 敵は矢印が無いので頭のすぐ上
   cursorRing.visible=mouse.on&&mouse.inside&&state!=='menu';
-  if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const hot=ball.owner===active&&mousePassTarget(); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
-  if(passing&&ball.owner===active){ passHold+=dt;
-    if(passHold>.22){ const pl=FORMATIONS[myForm].holdPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1); } }
-    else { throughMark.visible=false; const q=userPassTarget(false); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); } }
+  if(cursorRing.visible){ cursorRing.position.set(mouse.x,.04,mouse.z); const p=ball.owner; const hot=p&&p.team===0&&(p===active||p.role==='GK')&&mousePassTarget(p); cursorRing.material.color.copy(hot?CUR_HOT:CUR_IDLE); cursorRing.scale.setScalar(hot?1.25:1); }
+  if(passing&&ball.owner===passingPlayer()){ passHold+=dt;
+    const p=passingPlayer();
+    if(p.role!=='GK'&&passHold>.22){ const pl=FORMATIONS[myForm].holdPlan(); targetRing.visible=throughMark.visible=!!pl; if(pl){ targetRing.position.set(pl.q.pos.x,.035,pl.q.pos.z); throughMark.position.set(pl.tx,.05,pl.tz); throughMark.rotation.z+=dt*4; const k=1+Math.sin(T*10)*.08; throughMark.scale.set(k,k,1); } }
+    else { throughMark.visible=false; const q=(mouse.on&&mouse.inside?mousePassTarget(p):null)||userPassTarget(false,p); targetRing.visible=!!q; if(q) targetRing.position.set(q.pos.x,.035,q.pos.z); } }
   else { targetRing.visible=false; throughMark.visible=false; }
   // ファーストタッチの予約中：受ける選手の前に、ボールを置く方向を◇で示す
   if(ball.touchReq&&!ball.owner&&ball.passTo===active&&state==='play'){ const d=touchDir(active);
