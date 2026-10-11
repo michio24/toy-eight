@@ -49,7 +49,7 @@ function context(names = []) {
     clamp: (x, a, b) => Math.max(a, Math.min(b, x)), rnd: (a, b) => (a + b) / 2,
     sfx: {kick() {}, bounce() {}, ooh() {}, tackle() {}, whistle() {}}, addMom() {}, skillPop() {}, markRadarBreak() {}, recordRadarFrame() {}, startRadarSkill() {}, endRadarSkill() {},
     frameCollide() {}, inputVec: () => ({x: 0, z: 0, m: 0}), switchPlayer() {}, setActive: p => {c.active = p;},
-    firstTouch: () => false, feedReceiving: () => false, wallReceiving: () => false, topSupporting: () => false, midfieldBalanced: () => false, wingAttacking: () => false, targetAttacking: () => false, goalChargeLine: () => null, ST: {passOk: [0, 0], poss: [0, 0], tackles: [0, 0]},
+    firstTouch: () => false, feedReceiving: () => false, wallReceiving: () => false, topSupporting: () => false, midfieldBalanced: () => false, wingAttacking: () => false, targetAttacking: () => false, goalChargeLine: () => null, gkCrossTarget: () => null, ST: {passOk: [0, 0], poss: [0, 0], tackles: [0, 0]},
     userShoot: () => {c.shots = (c.shots || 0) + 1;}, userPass: () => {c.passes = (c.passes || 0) + 1;}};
   c.Math.random = () => .5;
   vm.createContext(c);
@@ -261,11 +261,13 @@ test('skill trail seeking only reveals the travelled path, fades after reception
 test('skill trail drawing uses distinct colours, dashes and directional arrowheads', () => {
   const c = radarContext(['drawRadarTrails']); const calls = [], g = {};
   for(const name of ['save', 'restore', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'closePath', 'fill', 'setLineDash']) {
-    g[name] = (...args) => {calls.push({name, args, color: g.strokeStyle});};
+    g[name] = (...args) => {calls.push({name, args, color: g.strokeStyle, blur: g.shadowBlur, width: g.lineWidth, composite: g.globalCompositeOperation});};
   }
   const kinds = ['wall', 'through', 'feed', 'cross'];
-  c.drawRadarTrails(g, (x, z) => [x, z], kinds.map(kind => ({kind, alpha: 1, points: [{x: 0, z: 0}, {x: 10, z: 4}]})));
-  assert.equal(new Set(calls.filter(x => x.name === 'stroke').map(x => x.color)).size, 4);
+  c.drawRadarTrails(g, (x, z) => [x, z], kinds.map(kind => ({kind, alpha: 1, points: [{clock: 0, x: 0, z: 0}, {clock: 8, x: 10, z: 4}]})));
+  assert.equal(new Set(calls.filter(x => x.name === 'stroke' && x.color !== '#ffffff').map(x => x.color)).size, 4);
+  assert.ok(calls.some(x => x.name === 'stroke' && x.blur === 16 && x.width === 7 && x.composite === 'lighter'));
+  assert.ok(calls.some(x => x.name === 'stroke' && x.color === '#ffffff' && x.width === 1.1));
   assert.equal(calls.filter(x => x.name === 'fill').length, 4);
   assert.ok(calls.some(x => x.name === 'setLineDash' && x.args[0].length));
   assert.equal(calls[0].name, 'save'); assert.equal(calls.at(-1).name, 'restore');
@@ -1085,6 +1087,114 @@ test('CPU tackle retains its launch speed on the frame it starts', () => {
   c.computeRoles = () => {}; c.fieldAI = (p, out) => {out.set(1, 0, 0); c.startTackle(p, false);};
   c.updatePlayers(1 / 60); assert.equal(p.tackleT, .32); assert.equal(p.vel.x, 10);
 });
+test('GK reads reachable cross destinations but leaves late, wide or unreachable crosses', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) {
+    const c = context(['gkCrossTarget']), p = player(team, 'GK');
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection; const d = c.teamDir(team), gx = -c.HL * d;
+    p.pos.set(gx + d * 1.5, 0, 0); c.ball.owner = null; c.ball.lastTouch = 1 - team;
+    c.ball.cross = {team: 1 - team, at: c.T + 1}; c.ball.pos.y = 2; c.ball.vel.y = 4.605;
+    let spot = {x: gx + d * 2.3, z: 1}; c.ballFuture = () => spot;
+    const target = c.gkCrossTarget(p);
+    assert.ok(target && (target.x - spot.x) * d < 0, 'claim from the goal side');
+    assert.ok(Math.abs(Math.hypot(target.x - spot.x, target.z - spot.z) - .75) < 1e-9);
+    spot = {x: gx + d * 4, z: 1}; assert.equal(c.gkCrossTarget(p), null, 'a reachable ball outside the goalmouth is left to the defence');
+    spot = {x: gx + d * 4, z: 8}; assert.equal(c.gkCrossTarget(p), null);
+    spot = {x: gx + d * 4, z: -3}; p.pos.z = 5; assert.equal(c.gkCrossTarget(p), null);
+    p.pos.z = 0; spot = {x: gx + d * 4, z: 1}; c.T = c.ball.cross.at + .2; assert.equal(c.gkCrossTarget(p), null);
+    c.T = 1; c.ball.cross.team = team; assert.equal(c.gkCrossTarget(p), null);
+  }
+});
+
+test('GK stays goal-side of a near-cross receiver in either half and near side', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) for (const side of [-1, 1]) {
+    const c = context(['gkCrossTarget', 'gkAI', 'guard', 'seek']);
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection;
+    const d = c.teamDir(team), gx = -c.HL * d, p = player(team, 'GK'), fw = player(1 - team, 'FW');
+    p.pos.set(gx + d * 1.5, 0, 0); fw.pos.set(gx + d * 3.5, 0, side * 2.5);
+    c.ball.owner = null; c.ball.lastTouch = 1 - team; c.ball.passTo = fw;
+    c.ball.pos.set(gx + d * 4, 2, side * 2.5); c.ball.vel.set(-d * 8, 4.605, 0);
+    c.ball.cross = {team: 1 - team, at: c.T + 1, until: c.T + 2, tz: side * 2.5};
+    c.ballFuture = () => ({x: gx + d * 4, z: side * 2.5});
+    const target = c.gkCrossTarget(p);
+    assert.equal(target, null, 'stay in goal even if the receiver is reachable');
+    c.intercept = () => {throw new Error('live cross must not trigger loose-ball chase');};
+    c.gkShotArrival = () => null;
+    // A late cross can no longer be claimed: keep guarding instead of chasing past the receiver.
+    c.T = c.ball.cross.at + .2;
+    const out = new Vector(); c.gkAI(p, out, 1 / 60);
+    assert.equal(p.crossClaimT, 0);
+    assert.ok(out.x * d < 0, 'retreat to guard the goal line');
+    assert.ok(out.z * side > 0, 'cover the near shooting lane');
+  }
+});
+
+test('GK moves forward to claim a cross and catches it above normal standing reach', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) {
+    const c = context(['gkCrossTarget', 'gkAI', 'guard', 'seek', 'gkCheck', 'aerialStrike']);
+    c.diff.gk = 1;
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection; const d = c.teamDir(team), gx = -c.HL * d;
+    const p = player(team, 'GK'), other = player(1 - team, 'GK'); other.pos.x = -gx;
+    p.pos.set(gx + d * .9, 0, 0); c.players = [p, other]; c.keeper = t => t === team ? p : other;
+    c.ball.owner = null; c.ball.lastTouch = 1 - team; c.ball.pos.set(gx + d * 7, 2, 14);
+    c.ball.vel.y = 4.605; c.ball.cross = {team: 1 - team, at: c.T + 1, until: c.T + 2, arm: c.T};
+    c.ballFuture = () => ({x: gx + d * 2.3, z: 0}); const out = new Vector(); c.gkAI(p, out, 1 / 60);
+    assert.ok(out.x * d > 0 && p.crossClaimT > c.T, 'GK comes out even while the ball is on the wing');
+    p.pos.set(gx + d * 1.55, 0, 0); c.ball.pos.set(p.pos.x, 2.55, 0); c.ball.vel.set(0, -9, 0);
+    c.sfx.catch = () => {}; c.gkCheck(); assert.equal(c.ball.owner, p);
+    c.aerialStrike(); assert.equal(c.ball.owner, p); assert.equal(c.ball.cross, null);
+  }
+  const c = context(['gkCheck']), p = player(0, 'GK'), other = player(1, 'GK');
+  p.pos.x = -26; other.pos.x = 29; c.players = [p, other]; c.keeper = t => t === 0 ? p : other;
+  c.ball.owner = null; c.ball.pos.set(-26, 2.55, 0); c.ball.vel.set(0, -9, 0);
+  c.gkCheck(); assert.equal(c.ball.owner, null, 'ordinary shots keep their existing catch reach');
+});
+
+test('GK claims a real cross by advancing under its flight on both goals', () => {
+  for (const team of [0, 1]) for (const side of [-1, 1]) {
+    const c = context(['kick', 'throughPass', 'landTime', 'ballFuture', 'gkCrossTarget', 'gkAI', 'guard', 'seek', 'updatePlayers', 'updateBall', 'gkCheck']);
+    const d = c.teamDir(team), gx = -c.HL * d, p = player(team, 'GK'), other = player(1 - team, 'GK');
+    const wing = player(1 - team), fw = player(1 - team, 'FW');
+    p.pos.set(gx + d * 1.5, 0, 0); other.pos.set(-gx, 0, 0); wing.pos.set(gx + d * 10, 0, side * 14);
+    fw.pos.set(gx + d * 2.3, 0, 0); c.players = [p, other]; c.ball.owner = wing;
+    c.ball.pos.set(wing.pos.x, c.BR, wing.pos.z); c.diff.gk = 1; c.sfx.catch = () => {};
+    c.countPass = c.banner = c.crossRuns = () => {}; c.gkShotArrival = () => null;
+    c.waitingForGkKick = () => false; c.intercept = () => ({x: fw.pos.x, z: fw.pos.z});
+    c.keeper = t => t === team ? p : other; c.computeRoles = () => {}; c.tmpV = new Vector(); c.lerpAngle = a => a;
+    c.throughPass(wing, {q: fw, tx: fw.pos.x, tz: 0, cross: true}); c.active = null;
+    for (let i = 0; i < 240 && !c.ball.owner; i++) {
+      c.T += 1 / 120; c.updatePlayers(1 / 120); c.updateBall(1 / 120); c.gkCheck();
+    }
+    assert.equal(c.ball.owner, p, 'keeper intercepts the cross before it lands');
+    assert.ok((p.pos.x - gx) * d < 2, 'keeper claims within the goalmouth');
+  }
+});
+
+test('GK does not run behind the moving receiver during a real near cross', () => {
+  for (const team of [0, 1]) for (const halfDirection of [1, -1]) for (const side of [-1, 1]) for (const hz of [60, 120]) {
+    const c = context(['kick', 'throughPass', 'landTime', 'ballFuture', 'gkCrossTarget', 'gkAI', 'guard', 'seek', 'userControl', 'updatePlayers', 'updateBall', 'gkCheck']);
+    vm.runInContext(script.match(/const crossSpot=.*;/)[0], c);
+    c.teamDir = t => (t === 0 ? 1 : -1) * halfDirection;
+    const d = c.teamDir(team), gx = -c.HL * d, p = player(team, 'GK'), other = player(1 - team, 'GK');
+    const wing = player(1 - team), fw = player(1 - team, 'FW');
+    p.pos.set(gx + d * 1.5, 0, 0); other.pos.set(-gx, 0, 0);
+    wing.pos.set(gx + d * 10, 0, side * 14); fw.pos.set(gx + d * 4, 0, 0);
+    c.players = [p, other, fw]; c.ball.owner = wing; c.ball.pos.set(wing.pos.x, c.BR, wing.pos.z);
+    c.diff.gk = 1; c.sfx.catch = () => {}; c.countPass = c.banner = c.crossRuns = () => {};
+    c.gkShotArrival = () => null; c.waitingForGkKick = c.defenseCharging = () => false;
+    c.gkForwardSpot = () => null; c.intercept = () => c.ballFuture(.1);
+    c.keeper = t => t === team ? p : other; c.computeRoles = () => {}; c.tmpV = new Vector(); c.lerpAngle = a => a;
+    c.throughPass(wing, {q: fw, tx: fw.pos.x, tz: side * 2.5, cross: true}); c.active = fw;
+    let contested = false;
+    for (let i = 0; i < hz * 2 && !c.ball.owner; i++) {
+      c.T += 1 / hz; c.updatePlayers(1 / hz); c.updateBall(1 / hz); c.gkCheck();
+      assert.ok((fw.pos.x - p.pos.x) * d > 0, 'GK stays between receiver and goal throughout the flight');
+      assert.ok((p.pos.x - gx) * d <= 1.5, 'GK protects the goal instead of joining the receiver at the landing spot');
+      if (c.ball.owner === p || (c.ball.pos.y <= 2.6 && c.dXZ(fw.pos, c.ball.pos) < 1.35)) {contested = true; break;}
+    }
+    assert.ok(contested, 'flight reaches the actual catching or aerial-strike window');
+  }
+});
+
 test('GK reacts to high central shots and recovers from a dive after a catch', () => {
   const c = context(['gkAI']); const p = player(1, 'GK'); p.pos.x = 29.1;
   c.diff = {spd: 1}; c.waitingForGkKick = () => false; c.seek = () => {}; c.intercept = () => ({x: 29.1, z: 0});
@@ -1094,6 +1204,22 @@ test('GK reacts to high central shots and recovers from a dive after a catch', (
   c.ownerAI = () => {}; c.ball.owner = p;
   for (let i = 0; i < 40; i++) c.gkAI(p, new Vector(), 1 / 60);
   assert.equal(p.diveT, 0);
+});
+test('GK still saves a cross heading directly into goal and a shot after the cross', () => {
+  for (const team of [0, 1]) for (const side of [-1, 1]) {
+    const c = context(['gkAI', 'guard', 'seek']), p = player(team, 'GK'), d = c.teamDir(team), gx = -c.HL * d;
+    p.pos.set(gx + d * .9, 0, 0); c.ball.owner = null;
+    c.ball.pos.set(gx + d * 4, 2, side * 2.5); c.ball.vel.set(-d * 20, -2, 0);
+    c.ball.cross = {team: 1 - team, at: c.T + .3, until: c.T + 1, tz: side * 2.5};
+    c.gkShotArrival = () => ({t: .15, z: side * 2.5, y: 1.2});
+    c.intercept = () => {throw new Error('do not chase the cross outside the goalmouth');};
+    assert.equal(c.gkAI(p, new Vector(), 1 / 60), 'nosteer');
+    assert.ok(p.diveT > 0 && p.vel.z * side > 0, 'react to a direct cross toward goal');
+    p.diveT = 0; p.vel.set(0, 0, 0); c.ball.cross = null;
+    c.waitingForGkKick = () => true;
+    assert.equal(c.gkAI(p, new Vector(), 1 / 60), 'nosteer');
+    assert.ok(p.diveT > 0 && p.vel.z * side > 0, 'react to the following header or volley');
+  }
 });
 test('GK cannot cover near to far immediately, in either goal or direction', () => {
   for (const team of [0, 1]) for (const side of [-1, 1]) for (const hz of [60, 120]) {

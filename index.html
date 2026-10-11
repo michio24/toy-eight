@@ -1809,7 +1809,7 @@ function resetPositions(){
     const d=teamDir(p.team);
     p.pos.set(p.base.x*d,0,p.base.z*d); p.vel.set(0,0,0); p.face=d>0?Math.PI/2:-Math.PI/2;
     p.locked=false; p.stunT=p.tackleT=p.diveT=p.receiveT=p.holdT=0; p.pickupCD=0; p.celebrate=0; p.yOff=0;
-    p.fooledT=p.evadeT=p.spinT=p.boostT=p.pkHold=p.headT=0; p.boxRun=null; p.cpressT=0; p.runUntil=p.throughBoostUntil=0; p.tackleMiss=false;
+    p.fooledT=p.evadeT=p.spinT=p.boostT=p.pkHold=p.headT=p.crossClaimT=0; p.boxRun=null; p.cpressT=0; p.runUntil=p.throughBoostUntil=0; p.tackleMiss=false;
   });
 }
 function setupKickoff(team){
@@ -2774,20 +2774,29 @@ function radarSkillTrailsAt(which,at){
   });
 }
 function drawRadarTrails(g,P,trails){
-  g.save(); g.lineCap='round'; g.lineJoin='round';
+  g.save(); g.lineCap='round'; g.lineJoin='round'; g.globalCompositeOperation='lighter';
   for(const trail of trails){
     if(trail.points.length<2) continue;
     const style=RADAR_SKILLS[trail.kind];
-    g.globalAlpha=trail.alpha; g.strokeStyle=style.color; g.fillStyle=style.color; g.lineWidth=2.5; g.setLineDash(style.dash);
+    g.strokeStyle=style.color; g.fillStyle=style.color; g.shadowColor=style.color; g.setLineDash(style.dash);
     g.beginPath();
-    trail.points.forEach((p,i)=>{ const [x,y]=P(p.x,p.z); if(i) g.lineTo(x,y); else g.moveTo(x,y); }); g.stroke();
+    trail.points.forEach((p,i)=>{ const [x,y]=P(p.x,p.z); if(i) g.lineTo(x,y); else g.moveTo(x,y); });
+    // 色付きの光を広げ、その中に白い芯を重ねる。
+    g.globalAlpha=trail.alpha*.3; g.lineWidth=7; g.shadowBlur=16; g.stroke();
+    g.globalAlpha=trail.alpha; g.lineWidth=3; g.shadowBlur=8; g.stroke();
+    g.globalAlpha=trail.alpha*.9; g.strokeStyle='#ffffff'; g.lineWidth=1.1; g.shadowBlur=0; g.stroke();
     g.setLineDash([]);
     const last=trail.points[trail.points.length-1], [x,y]=P(last.x,last.z);
     let prev=trail.points.length-2, dx=0,dy=0;
     for(;prev>=0;prev--){ const [a,b]=P(trail.points[prev].x,trail.points[prev].z); dx=x-a; dy=y-b; if(Math.hypot(dx,dy)>1) break; }
     const len=Math.hypot(dx,dy); if(len<=1) continue;
     dx/=len; dy/=len;
+    g.globalAlpha=trail.alpha; g.shadowBlur=10;
     g.beginPath(); g.moveTo(x,y); g.lineTo(x-dx*8-dy*4,y-dy*8+dx*4); g.lineTo(x-dx*8+dy*4,y-dy*8-dx*4); g.closePath(); g.fill();
+    // 先端のきらめきも記録時刻に合わせ、シークや一時停止で再現する。
+    const sparkle=4+2*Math.sin((last.clock-trail.points[0].clock)/CLOCK_RATE*12);
+    g.strokeStyle='#ffffff'; g.lineWidth=1.2; g.shadowBlur=12;
+    g.beginPath(); g.moveTo(x-sparkle,y); g.lineTo(x+sparkle,y); g.moveTo(x,y-sparkle); g.lineTo(x,y+sparkle); g.stroke();
   }
   g.restore();
 }
@@ -3221,6 +3230,25 @@ function gkShotArrival(xl,d){
   }
   return null;
 }
+// クロスはゴール前を守り、すぐ手が届く範囲だけ捕球に出る。
+function gkCrossTarget(p){
+  const c=ball.cross;
+  if(ball.owner||!c||c.team===p.team||T>c.at+.15||ball.lastTouch===p.team) return null;
+  const tt=Math.max(.08,c.at-T), f=ballFuture(tt), d=teamDir(p.team), gx=-HL*d;
+  const depth=(f.x-gx)*d, y=ball.pos.y+ball.vel.y*tt-.5*(ball.grav||9.81)*tt*tt;
+  if(depth<.5||depth>2.5||Math.abs(f.z)>GW-.3||y<.8||y>2.8) return null;
+  // 落下点そのものへ走り抜けず、ゴール側に余裕を残して構える。
+  const n=Math.hypot(gx-f.x,f.z)||1;
+  const target={x:f.x+(gx-f.x)/n*.75,z:f.z-f.z/n*.75};
+  const receiver=ball.passTo;
+  if(receiver&&receiver.team!==p.team&&dXZ(receiver.pos,f)<2){
+    const limit=clamp((receiver.pos.x-gx)*d-.65,.5,9);
+    target.x=gx+d*Math.min((target.x-gx)*d,limit);
+  }
+  const sm=p.team===1?diff.spd:1;
+  const reach=Math.max(Math.abs(target.x-p.pos.x)/(SPRINT*sm),Math.abs(target.z-p.pos.z)/(RUN*.8*sm))+.18;
+  return reach<=tt+.12?target:null;
+}
 function gkAI(p,out,dt){
   if(ball.owner===p){ p.diveT=Math.max(0,p.diveT-dt); return ownerAI(p,out,dt); }
   const t=p.team, d=teamDir(t), gx=-HL*d, sm=(t===1?diff.spd:1);
@@ -3231,16 +3259,23 @@ function gkAI(p,out,dt){
   const bdx=(ball.pos.x-gx)*d;
   let tx=gx+d*clamp(1.2+(25-bdx)*.04,1.2,2.4), tz=clamp(ball.pos.z*.3,-GW+.5,GW-.5), spd=RUN*1.05*sm;
   const o=ball.owner;
+  const crossLive=!o&&ball.cross&&ball.cross.team!==t&&T<=ball.cross.until;
+  if(crossLive){
+    // 受け手の落下点へ並ばず、ゴールライン寄りからニア／ファーのシュートに備える。
+    tx=gx+d*.9; tz=clamp(ball.cross.tz*.65,-GW+.6,GW-.6);
+  }
+  const crossTarget=gkCrossTarget(p); p.crossClaimT=crossTarget?T+.18:0;
+  if(crossTarget){ tx=crossTarget.x; tz=crossTarget.z; spd=SPRINT*sm; }
   if(o&&o.team!==t&&bdx<12&&Math.abs(ball.pos.z)<11){
     const r=dXZ(p.pos,o.pos);
     if(r<7){ tx=o.pos.x+(gx-o.pos.x)*.4; tz=o.pos.z*.6; spd=SPRINT*sm; }
     if(r<1.4&&!o.locked&&o.evadeT<=0&&p.fooledT<=0&&Math.random()<1.4*dt*(t===1?diff.gk:1)){ ball.owner=p; p.holdT=rnd(2,3); o.stunT=.5; ball.lastTouch=t; sfx.catch(); }
   }
-  if(!o&&!waitingForGkKick(t)&&bdx<10&&Math.abs(ball.pos.z)<11){
+  if(!o&&!crossTarget&&!crossLive&&!waitingForGkKick(t)&&bdx<10&&Math.abs(ball.pos.z)<11){
     let od=99; for(const q of players) if(q.team!==t) od=Math.min(od,dXZ(q.pos,ball.pos));
     if(dXZ(p.pos,ball.pos)<od+1){ const f=intercept(p,SPRINT); tx=f.x; tz=f.z; spd=SPRINT*sm; }
   }
-  if(!o&&ball.vel.x*d<-5){
+  if(!o&&!crossTarget&&ball.vel.x*d<-5){
     const xl=gx+d*.9, arrival=gkShotArrival(xl,d);
     if(arrival&&arrival.t>0){
       const tt=arrival.t, zc=arrival.z;
@@ -3421,13 +3456,14 @@ function gkCheck(){
     if(p.pickupCD>0||p.stunT>0) continue;
     const d=teamDir(p.team), gx=-HL*d, bdx=(ball.pos.x-gx)*d;
     if(bdx>12.5||bdx<-1.5||Math.abs(ball.pos.z)>10.5) continue;
-    const cy=p.diveT>0?1.15:1.1, r=p.diveT>0?1.45:.95;
+    const claiming=p.crossClaimT>T&&ball.cross&&ball.cross.team!==p.team&&ball.vel.y<0;
+    const cy=claiming?1.65:p.diveT>0?1.15:1.1, r=claiming?1.05:p.diveT>0?1.45:.95;
     const dist=Math.hypot(ball.pos.x-p.pos.x,ball.pos.y-cy,ball.pos.z-p.pos.z);
     if(dist>r||ball.pos.y>2.7) continue;
     const sp=ball.vel.length();
     let ch;
     if(sp<7) ch=1;
-    else { if(p.rolled===ball.shot) continue; p.rolled=ball.shot; ch=clamp(1.3-sp/30,.2,.97)*(p.team===1?diff.gk:1); }
+    else { if(p.rolled===ball.shot) continue; p.rolled=ball.shot; ch=(claiming?clamp(1.5-sp/36,.25,.98):clamp(1.3-sp/30,.2,.97))*(p.team===1?diff.gk:1); }
     // スタッツ：相手シュートに触れたらセーブ（強いシュートならハイライト候補）
     const si=ball.shotInfo;
     if(sp>=7&&si&&si.team!==p.team&&!si.saved&&T-si.T<3){ si.saved=true; markOnTarget(si); ST.saves[p.team]++; p.st.sv++; if(sp>16) queueChance('save',si,p); }
@@ -3671,6 +3707,7 @@ function updateVisuals(dt){
     p.armL.rotation.x=-sw*.8; p.armR.rotation.x=sw*.8;
     if(p.kickAnim>0){ const k=p.kickAnim; p.hipR.rotation.x=k>.75?(1-k)*3.2:-1.35*Math.sin(k/.75*Math.PI*.5+.2); }
     if(p.role==='GK'&&ball.owner===p&&p.holdT>0){ p.armL.rotation.x=p.armR.rotation.x=-1.25; }
+    if(p.role==='GK'&&p.crossClaimT>T&&!ball.owner){ p.armL.rotation.x=p.armR.rotation.x=-2.4; }
     p.body.position.y=Math.abs(Math.sin(p.phase))*.07*amp;
     p.body.rotation.x=Math.min(sp,9)*.025+(p.tackleT>0?.55:0);
     let rz=0, y=0;
@@ -4106,7 +4143,7 @@ function step(dt){
     skillInput(dt);
     updatePlayers(dt); updateBall(dt);
     if(pendingFoul){ const f=pendingFoul; pendingFoul=null; callFoul(f.by,f.victim); }
-    aerialStrike(); gkCheck(); tryPickup(); checkRules();
+    gkCheck(); aerialStrike(); tryPickup(); checkRules();
     updateActionHolds(0);
     recordRadarFrame(state==='goal');
   }
