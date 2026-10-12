@@ -61,7 +61,7 @@ const controls = ['canAct', 'canKick', 'press', 'release', 'cancelHolds', 'updat
 test('inline JavaScript parses', () => new vm.Script(script));
 
 function radarContext(names = []) {
-  const c = context(['markRadarBreak', 'recordRadarFrame', 'radarSnapshotAt', 'renderRadarGoals', 'startRadarSkill', 'sampleRadarSkill', 'endRadarSkill', 'radarSkillTrailsAt', ...names]);
+  const c = context(['markRadarBreak', 'recordRadarFrame', 'radarSnapshotAt', 'renderRadarGoals', 'startRadarSkill', 'sampleRadarSkill', 'endRadarSkill', 'radarSkillTrailsAt', 'radarGoalBurstsAt', ...names]);
   vm.runInContext(script.match(/const RADAR_SKILLS=.*;/)[0], c);
   c.ST.goals = [];
   Object.assign(c, {radarHistory: [[], []], radarBreak: true, radarReview: null, radarSkills: [[], []], radarSkill: null, half: 1, clock: 0, TEAMS: [{name: 'home'}, {name: 'away'}],
@@ -208,6 +208,65 @@ test('goal markers use exact times in the correct half and let either team goal 
   marks[1].click(); assert.equal(c.seeked, 1500.25);
   marks.length = 0; c.ST.goals = []; c.renderRadarGoals(2, ui); assert.equal(ui.goals.hidden, true); assert.equal(marks.length, 0);
 });
+test('radar goal bursts follow goal time and position across seeking, pausing and both halves', () => {
+  const c = radarContext(['openRadarReview', 'updateRadarReviewControls', 'updateRadarReview', 'seekRadarReview']);
+  c.document.createElement = () => ({style: {}, setAttribute() {}, addEventListener() {}});
+  c.ST.goals = [{half: 1, team: 0, name: 'A', clock: 16, pos: {x: 30, z: 2}}, {half: 2, team: 1, name: 'B', clock: 1216, pos: {x: -30, z: -1}}];
+  assert.equal(c.radarGoalBurstsAt(1, 15).length, 0);
+  assert.equal(c.radarGoalBurstsAt(2, 16).length, 0);
+  assert.equal(c.radarGoalBurstsAt(1, 64).length, 0);
+  for (const half of [1, 2]) {
+    c.half = half; c.clock = (half - 1) * 1200; c.recordRadarFrame(true); c.clock += 100; c.recordRadarFrame(true);
+    const {ui} = reviewFixture(c); c.state = half === 1 ? 'half' : 'end'; c.$(half === 1 ? '#halfOv' : '#endOv').hidden = false;
+    ui.goals.appendChild = () => {};
+    c.openRadarReview(half, ui); c.radarReview.playing = false;
+    let bursts; c.renderRadar = (...args) => {bursts = args[10];};
+    const goal = c.ST.goals[half - 1];
+    c.seekRadarReview(goal.clock); assert.equal(bursts.length, 1); assert.equal(bursts[0].x, goal.pos.x); assert.equal(bursts[0].z, goal.pos.z); assert.equal(bursts[0].progress, 0);
+    c.seekRadarReview(goal.clock + 24); assert.equal(bursts[0].progress, .5);
+    c.updateRadarReview(1); assert.equal(bursts[0].progress, .5);
+    c.seekRadarReview(goal.clock + 49); assert.equal(bursts.length, 0);
+    c.seekRadarReview(goal.clock); assert.equal(bursts[0].progress, 0);
+    c.seekRadarReview(goal.clock - 1); assert.equal(bursts.length, 0);
+  }
+});
+
+test('goal scoring records an independent position at either goal line', () => {
+  for (const team of [0, 1]) {
+    const c = radarContext(['goalScored']);
+    const stop = new Error('stop after recording');
+    Object.assign(c, {score: [0, 0], goalStreak: 0, chain: {team, passes: 0}, keeper: () => ({pos: {z: 0}}), matchMin: () => 5, hlPend: [], updateScore: () => {throw stop;}});
+    c.clock = 300; c.ball.pos.set(team ? -30.2 : 30.2, 1, -2);
+    assert.throws(() => c.goalScored(team), error => error === stop);
+    const goal = c.ST.goals[0];
+    assert.equal(goal.pos.x, team ? -30 : 30); assert.equal(goal.pos.z, -2); assert.equal(goal.clock, 300);
+    c.ball.pos.set(0, 0, 0); assert.equal(goal.pos.z, -2);
+  }
+});
+
+test('radar goal explosion draws rings, sparks and a label at the recorded position and restores canvas state', () => {
+  const c = radarContext(['drawRadarGoalBursts']);
+  for (const [cw, ch] of [[260, 186], [600, 428]]) {
+    const calls = [], g = {};
+    for (const name of ['save', 'restore', 'beginPath', 'closePath', 'arc', 'fill', 'stroke', 'moveTo', 'lineTo', 'strokeText', 'fillText']) {
+      g[name] = (...args) => {for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value)); calls.push({name, args, alpha: g.globalAlpha});};
+    }
+    g.createRadialGradient = () => ({addColorStop() {}});
+    for (const progress of [0, .25, .6, .99]) {
+      calls.length = 0;
+      c.drawRadarGoalBursts(g, (x, z) => [x, z], [{x: cw - 7, z: ch / 2, progress}], cw, ch);
+      const rings = calls.filter(v => v.name === 'arc');
+      assert.ok(rings.length >= 2); assert.ok(rings.every(v => v.args[0] === cw - 7));
+      assert.ok(rings.every(v => v.args[2] <= 2 + Math.min(cw, ch) * .18));
+      assert.ok(calls.filter(v => v.name === 'lineTo').length >= 24);
+      const label = calls.find(v => v.name === 'fillText');
+      assert.equal(label.args[0], 'GOAL!'); if (progress > .9) assert.ok(label.alpha < .1);
+      assert.ok(calls.filter(v => ['fill', 'stroke', 'fillText'].includes(v.name)).every(v => v.alpha >= 0 && v.alpha <= 1));
+      assert.equal(calls[0].name, 'save'); assert.equal(calls.at(-1).name, 'restore');
+    }
+  }
+});
+
 test('special passes record both teams and distinguish the two legs of a one-two', () => {
   for (const team of [0, 1]) for (const kind of ['wall', 'through', 'feed', 'cross']) {
     const c = radarContext(['kick', 'throughPass', 'wallPass', 'wallReturn', 'longFeed']);
