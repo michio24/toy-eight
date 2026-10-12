@@ -187,7 +187,7 @@ h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-hei
 .review-goal::before{content:'';position:absolute;left:11px;top:-8px;width:2px;height:8px;background:var(--gold)}
 .review-skill-legend{display:flex;gap:6px 12px;flex-wrap:wrap;font-size:11px}
 .review-skill-legend span{border-bottom:2px solid var(--skill-color);padding-bottom:2px}
-.review-skill-status{min-height:1.5em;font-size:12px;color:var(--gold)}
+.review-skill-status{flex:none;min-width:0;height:1.5em;line-height:1.5;font-size:12px;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scorers{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;font-weight:700;margin-top:-8px}
 .scorers ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;min-width:0}
 .scorers li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--chalk)}
